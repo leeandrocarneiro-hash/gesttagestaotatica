@@ -168,7 +168,7 @@ function Index() {
                       <tr key={x.id} className="border-t">
                         <td className="px-2 py-2 font-medium">{x.id}</td>
                         <td className="px-2 py-2">{x.cliente}</td>
-                        <td className="px-2 py-2"><StatusSelect id={x.id} value={x.status} /></td>
+                        <td className="px-2 py-2"><StatusSelect id={x.id ?? ""} value={x.status ?? ""} /></td>
                         <td className="px-2 py-2">{brl(x.preco)}</td>
                         <td className="px-2 py-2">{brl(x.mat)}</td>
                         <td className="px-2 py-2">{brl(x.desp)}</td>
