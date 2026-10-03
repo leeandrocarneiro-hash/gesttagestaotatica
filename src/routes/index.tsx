@@ -7,7 +7,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { Download, ExternalLink, RefreshCw, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus } from "@/lib/sheets.functions";
-import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName } from "@/lib/sheets-config";
+import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
 
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/")({
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-lg p-8 text-center">
       <h1 className="text-xl font-semibold">Não foi possível ler a planilha</h1>
-      <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{(error as Error).message}</p>
     </div>
   ),
 });
@@ -247,12 +247,13 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
   const qc = useQueryClient();
   const fn = useServerFn(addRow);
   const today = new Date().toISOString().slice(0, 10);
-  const initial = () => cfg.fields.map((f) => (f.type === "date" ? today : f.type === "select" && f.required ? f.options![0] : ""));
+  const fields = cfg.fields as Field[];
+  const initial = (): string[] => fields.map((f) => (f.type === "date" ? today : f.type === "select" && f.required ? (f.options?.[0] ?? "") : ""));
   const [values, setValues] = useState<string[]>(initial);
   const services = data.Servicos.filter((r) => r[0]);
 
   const m = useMutation({
-    mutationFn: () => fn({ data: { tab, values: values.map((v, i) => (cfg.fields[i].type === "number" ? v.replace(",", ".") : v)) } }),
+    mutationFn: () => fn({ data: { tab, values: values.map((v, i) => (fields[i]?.type === "number" ? v.replace(",", ".") : v)) } }),
     onSuccess: () => { toast.success("Lançado na planilha!"); setValues(initial()); qc.invalidateQueries({ queryKey: ["sheet"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -267,7 +268,7 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
       <Panel title={`Novo lançamento — ${cfg.title}`}>
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">{cfg.hint}</p>
         <form onSubmit={submit} className="space-y-3">
-          {cfg.fields.map((f, i) => {
+          {fields.map((f, i) => {
             const set = (v: string) => setValues((p) => p.map((x, j) => (j === i ? v : x)));
             return (
               <label key={f.label} className="block">
