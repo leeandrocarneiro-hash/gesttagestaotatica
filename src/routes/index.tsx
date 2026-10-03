@@ -242,6 +242,28 @@ function StatusSelect({ id, value }: { id: string; value: string }) {
   );
 }
 
+function DeleteButton({ tab, row, label }: { tab: TabName; row: number; label: string }) {
+  const qc = useQueryClient();
+  const fn = useServerFn(deleteRow);
+  const m = useMutation({
+    mutationFn: () => fn({ data: { tab, row } }),
+    onSuccess: () => { toast.success("Lançamento excluído"); qc.invalidateQueries({ queryKey: ["sheet"] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <button
+      type="button"
+      title={`Excluir ${label}`}
+      aria-label={`Excluir ${label}`}
+      disabled={m.isPending}
+      className="rounded-md p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+      onClick={() => { if (window.confirm(`Excluir ${label}? Esta ação não pode ser desfeita.`)) m.mutate(); }}
+    >
+      <Trash2 className="h-4 w-4" />
+    </button>
+  );
+}
+
 function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
   const cfg = TABS[tab];
   const qc = useQueryClient();
