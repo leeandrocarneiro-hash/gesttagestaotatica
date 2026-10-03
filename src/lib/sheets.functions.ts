@@ -67,6 +67,39 @@ export const addRow = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deleteRow = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        tab: z.enum(TAB_NAMES as [TabName, ...TabName[]]),
+        row: z.number().int().min(2).max(100000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const meta = await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}`);
+    const sheet = meta.sheets?.find((s: { properties: { title: string; sheetId: number } }) => s.properties.title === data.tab);
+    if (!sheet) throw new Error("Aba não encontrada");
+    await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+      method: "POST",
+      body: JSON.stringify({
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId: sheet.properties.sheetId,
+                dimension: "ROWS",
+                startIndex: data.row - 1,
+                endIndex: data.row,
+              },
+            },
+          },
+        ],
+      }),
+    });
+    return { ok: true };
+  });
+
 export const updateStatus = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ id: z.string().max(20), status: z.string().max(40) }).parse(d))
   .handler(async ({ data }) => {

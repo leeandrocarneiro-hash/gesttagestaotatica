@@ -4,9 +4,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, ExternalLink, RefreshCw, Plus } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getSheetData, addRow, updateStatus } from "@/lib/sheets.functions";
+import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
@@ -310,12 +310,18 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-muted-foreground">
-              <tr>{headers.map((h) => <th key={h} className="whitespace-nowrap px-2 py-2 font-medium">{h}</th>)}</tr>
+              <tr>
+                {headers.map((h) => <th key={h} className="whitespace-nowrap px-2 py-2 font-medium">{h}</th>)}
+                <th className="px-2 py-2" />
+              </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr key={i} className="border-t">
                   {headers.map((_, j) => <td key={j} className="px-2 py-2">{r[j]}</td>)}
+                  <td className="px-2 py-2 text-right">
+                    <DeleteButton tab={tab} row={rows.length - i + 1} label={r[0] || r[1] || "este lançamento"} />
+                  </td>
                 </tr>
               ))}
             </tbody>
