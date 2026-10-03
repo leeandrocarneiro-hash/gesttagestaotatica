@@ -23,7 +23,7 @@ async function call(url: string, init?: RequestInit) {
 
 async function readAll(): Promise<SheetData> {
   const qs = TAB_NAMES.map((t) => `ranges=${t}!A2:H`).join("&");
-  const j = await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values:batchGet?${qs}&valueRenderOption=UNFORMATTED_VALUE`);
+  const j = await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values:batchGet?${qs}`);
   const out = {} as SheetData;
   TAB_NAMES.forEach((t, i) => {
     out[t] = ((j.valueRanges?.[i]?.values ?? []) as unknown[][]).map((r) => r.map((c) => String(c ?? "")));
