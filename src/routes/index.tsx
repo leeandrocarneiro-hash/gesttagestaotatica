@@ -7,6 +7,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
+import { ReportPdfButton } from "@/components/ReportPdfButton";
 import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
@@ -100,6 +101,7 @@ function Index() {
             <Button variant="secondary" size="sm" asChild>
               <a href={SHEET_URL} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
             </Button>
+            <ReportPdfButton data={data} />
             <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
               <a href={SHEET_XLSX_URL} target="_blank" rel="noreferrer"><Download /> Baixar com gráficos</a>
             </Button>
