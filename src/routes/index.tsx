@@ -8,6 +8,7 @@ import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
+import { InvoiceImportButton } from "@/components/InvoiceImportButton";
 import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
@@ -293,6 +294,7 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       <Panel title={`Novo lançamento — ${cfg.title}`}>
+        {tab === "Materiais" && <div className="mb-4"><InvoiceImportButton /></div>}
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">{cfg.hint}</p>
         <form onSubmit={submit} className="space-y-3">
           {fields.map((f, i) => {
