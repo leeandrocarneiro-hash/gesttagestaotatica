@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
@@ -73,6 +73,22 @@ function Index() {
   const s = useSummary(data);
   const [tab, setTab] = useState<TabName | "Resumo">("Resumo");
   const [refreshing, setRefreshing] = useState(false);
+
+  // Revalida os dados quando o usuário retorna de uma aba externa (Google Sheets/XLSX).
+  // Isso força os gráficos do Recharts a renderizarem novamente após a troca de foco.
+  useEffect(() => {
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") {
+        void qc.invalidateQueries({ queryKey: ["sheet"] });
+      }
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("pageshow", refreshOnReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("pageshow", refreshOnReturn);
+    };
+  }, [qc]);
 
   const agendados = s.services.filter((x) => x.status === "Agendado" || x.status === "Em execução");
 
