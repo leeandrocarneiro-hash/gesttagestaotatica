@@ -101,9 +101,6 @@ function Index() {
             <Button variant="secondary" size="sm" asChild>
               <a href={SHEET_URL} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
             </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <a href={SHEET_URL} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
-            </Button>
             <ReportPdfButton data={data} />
             <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
               <a href={SHEET_XLSX_URL} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
