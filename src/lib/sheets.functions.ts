@@ -67,6 +67,33 @@ export const addRow = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const updateRow = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({
+      tab: z.enum(TAB_NAMES as [TabName, ...TabName[]]),
+      row: z.number().int().min(2).max(100000),
+      values: z.array(z.string().max(2000)).max(10),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const row = data.values.map((v) => {
+      const n = Number(v);
+      return v !== "" && /^-?\\d+(\\.\\d+)?$/.test(v) && !Number.isNaN(n) ? n : v;
+    });
+    const startColumn = data.tab === "Servicos" ? "B" : "A";
+    if (data.tab === "Materiais") {
+      const q = Number(row[4]) || 0;
+      const u = Number(row[5]) || 0;
+      row.push(Math.round(q * u * 100) / 100);
+    }
+    const endColumn = data.tab === "Servicos" ? "H" : data.tab === "Materiais" ? "G" : String.fromCharCode(64 + row.length);
+    await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values/${data.tab}!${startColumn}${data.row}:${endColumn}${data.row}?valueInputOption=USER_ENTERED`, {
+      method: "PUT",
+      body: JSON.stringify({ values: [row] }),
+    });
+    return { ok: true };
+  });
+
 export const deleteRow = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
