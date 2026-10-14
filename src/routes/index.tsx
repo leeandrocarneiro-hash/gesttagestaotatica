@@ -4,9 +4,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, Plus, Trash2, Pencil, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
+import { getSheetData, addRow, updateRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
 import { InvoiceImportButton } from "@/components/InvoiceImportButton";
 import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
@@ -289,26 +289,52 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
   const cfg = TABS[tab];
   const qc = useQueryClient();
   const fn = useServerFn(addRow);
+  const editFn = useServerFn(updateRow);
   const today = new Date().toISOString().slice(0, 10);
   const fields = cfg.fields as Field[];
   const initial = (): string[] => fields.map((f) => (f.type === "date" ? today : f.type === "select" && f.required ? (f.options?.[0] ?? "") : ""));
   const [values, setValues] = useState<string[]>(initial);
+  const [editing, setEditing] = useState<{ row: number; values: string[]; label: string } | null>(null);
   const services = data.Servicos.filter((r) => r[0]);
 
+  const normalizeValues = (v: string[]) => v.map((value, i) => (fields[i]?.type === "number" ? value.replace(",", ".") : value));
   const m = useMutation({
-    mutationFn: () => fn({ data: { tab, values: values.map((v, i) => (fields[i]?.type === "number" ? v.replace(",", ".") : v)) } }),
+    mutationFn: () => fn({ data: { tab, values: normalizeValues(values) } }),
     onSuccess: () => { toast.success("Lançado na planilha!"); setValues(initial()); qc.invalidateQueries({ queryKey: ["sheet"] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const editMutation = useMutation({
+    mutationFn: () => {
+      if (!editing) throw new Error("Nenhum lançamento selecionado");
+      return editFn({ data: { tab, row: editing.row, values: normalizeValues(editing.values) } });
+    },
+    onSuccess: () => { toast.success("Lançamento atualizado!"); setEditing(null); qc.invalidateQueries({ queryKey: ["sheet"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const headers = tab === "Servicos" ? ["ID", ...cfg.fields.map((f) => f.label)] : tab === "Materiais" ? [...cfg.fields.map((f) => f.label), "Total"] : cfg.fields.map((f) => f.label);
   const rows = [...data[tab]].reverse();
 
-  const submit = (e: FormEvent) => { e.preventDefault(); m.mutate(); };
+  const submit = (e: FormEvent) => { e.preventDefault(); if (editing) editMutation.mutate(); else m.mutate(); };
+  const beginEdit = (r: string[], sheetRow: number) => {
+    const source = tab === "Servicos" ? r.slice(1, 8) : r.slice(0, fields.length);
+    const editValues = fields.map((f, i) => {
+      const value = source[i] ?? "";
+      if (f.type === "date" && value) {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString().slice(0, 10);
+      }
+      return value;
+    });
+    setValues(editValues);
+    setEditing({ row: sheetRow, values: editValues, label: r[0] || r[1] || "lançamento" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-      <Panel title={`Novo lançamento — ${cfg.title}`}>
+      <Panel title={`${editing ? "Editar lançamento" : "Novo lançamento"} — ${cfg.title}`}>
+        {editing && <div className="mb-3 flex items-center justify-between rounded-lg bg-secondary p-3 text-sm"><span>Editando: <b>{editing.label}</b></span><Button type="button" size="sm" variant="ghost" onClick={() => { setEditing(null); setValues(initial()); }}><X className="mr-1 h-4 w-4" /> Cancelar</Button></div>}
         {tab === "Materiais" && <div className="mb-4"><InvoiceImportButton /></div>}
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">{cfg.hint}</p>
         <form onSubmit={submit} className="space-y-3">
@@ -318,7 +344,7 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
               <label key={f.label} className="block">
                 <span className="mb-1 block text-sm font-medium">{f.label}{f.required && " *"}</span>
                 {f.type === "textarea" ? (
-                  <textarea className="field" rows={2} required={f.required} value={values[i]} onChange={(e) => set(e.target.value)} />
+                  <textarea className="field" rows={2} required={f.required} value={values[i]} onChange={(e) => { const v = e.target.value; set(v); if (editing) setEditing((p) => p ? { ...p, values: p.values.map((x, j) => j === i ? v : x) } : p); }} />
                 ) : f.type === "select" ? (
                   <select className="field" required={f.required} value={values[i]} onChange={(e) => set(e.target.value)}>
                     {!f.required && <option value="">—</option>}
@@ -344,8 +370,8 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
               </label>
             );
           })}
-          <Button type="submit" className="w-full" disabled={m.isPending}>
-            <Plus /> {m.isPending ? "Salvando..." : "Lançar"}
+          <Button type="submit" className="w-full" disabled={m.isPending || editMutation.isPending}>
+            {editing ? <Check /> : <Plus />} {editing ? (editMutation.isPending ? "Salvando alterações..." : "Salvar alterações") : (m.isPending ? "Salvando..." : "Lançar")}
           </Button>
         </form>
       </Panel>
@@ -364,7 +390,10 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
                 <tr key={i} className="border-t">
                   {headers.map((_, j) => <td key={j} className="px-2 py-2">{r[j]}</td>)}
                   <td className="px-2 py-2 text-right">
-                    <DeleteButton tab={tab} row={rows.length - i + 1} label={r[0] || r[1] || "este lançamento"} />
+                    <div className="flex items-center justify-end gap-1">
+                      <button type="button" title="Editar lançamento" aria-label="Editar lançamento" className="rounded-md p-1.5 text-muted-foreground transition hover:bg-primary/10 hover:text-primary" onClick={() => beginEdit(r, rows.length - i + 1)}><Pencil className="h-4 w-4" /></button>
+                      <DeleteButton tab={tab} row={rows.length - i + 1} label={r[0] || r[1] || "este lançamento"} />
+                    </div>
                   </td>
                 </tr>
               ))}
