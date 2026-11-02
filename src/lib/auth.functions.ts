@@ -9,7 +9,7 @@ export const doLogin = createServerFn({ method: "POST" })
   .handler(async ({ data }) => login(data.login, data.senha));
 
 export const doLogout = createServerFn({ method: "POST" }).handler(async () => {
-  logout();
+  await logout();
   return { ok: true };
 });
 

@@ -19,6 +19,7 @@ export const Route = createFileRoute("/planilha-empresa")({
   beforeLoad: async () => {
     const session = await getSession();
     if (!session) throw redirect({ to: "/login" });
+    if (session.papel !== "company_admin") throw redirect({ to: "/" });
     return { session };
   },
   component: SheetPage,

@@ -66,3 +66,17 @@ Antes de usar com empresas reais, ainda é obrigatório:
 
 ## Compatibilidade
 Preservar os dados e a planilha operacional atual durante a migração. Não remover o fluxo legado até existir uma migração validada e um plano de reversão.
+
+
+## Implementação incremental no PR de autenticação
+
+Foi acrescentada uma camada inicial separada da autenticação legada:
+- `central-auth.server.ts`: login por e-mail e hash PBKDF2, cookie HttpOnly assinado, revalidação do usuário e do status da empresa na planilha central.
+- `central-auth.functions.ts`: funções server-side para sessão, login, logout, listagem, criação e bloqueio/reativação de empresas.
+- `/acesso-administrador`: entrada separada para o administrador geral.
+- `/admin`: painel inicial para cadastrar empresa + primeiro company_admin e controlar status.
+- A remoção do token temporário de configuração não impede mais o uso normal da autenticação central. O token só é exigido pelas rotinas de bootstrap/configuração.
+
+**Limitações ainda abertas:** o login público em `/login` continua usando a aba legada `Logins`; a nova autenticação central ainda não foi conectada aos dados operacionais nem ao fluxo de vínculo da planilha por empresa. A criação de empresa e usuário usa duas gravações sequenciais no Google Sheets, sem transação atômica; falhas entre gravações exigem reconciliação manual. O painel ainda não gerencia funcionários nem permissões por módulo. Rotas, tipos gerados, build, lint, testes e comportamento real do gateway ainda precisam ser validados no ambiente do projeto.
+
+Não utilizar em produção, não cadastrar empresas reais e não remover a aba legada até concluir a migração, os testes de isolamento e o plano de reversão.
