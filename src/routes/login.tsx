@@ -47,8 +47,8 @@ function LoginPage() {
           <p className="text-sm text-muted-foreground">Entre com o login da sua empresa.</p>
         </div>
         <label className="block space-y-1 text-sm">
-          <span>Login</span>
-          <input className="field w-full" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" required />
+          <span>E-mail de acesso</span>
+          <input className="field w-full" type="email" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" required />
         </label>
         <label className="block space-y-1 text-sm">
           <span>Senha</span>
