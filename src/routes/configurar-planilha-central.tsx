@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { initializeCentralSpreadsheet } from "@/lib/central-sheet.functions";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ function ConfigureCentralSpreadsheet() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Array<{ tab: string; status: "created" | "already_configured" }> | null>(null);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setResult(null);
