@@ -30,7 +30,10 @@ function centralId() {
 }
 
 async function secretKey() {
-  const raw = process.env["GESTTA_SESSION_SECRET"] || `gestta:${process.env["LOVABLE_API_KEY"]}`;
+  const raw = process.env["GESTTA_SESSION_SECRET"];
+  if (!raw || new TextEncoder().encode(raw).byteLength < 32) {
+    throw new Error("GESTTA_SESSION_SECRET precisa estar configurado com pelo menos 32 bytes aleatórios.");
+  }
   return crypto.subtle.importKey("raw", new TextEncoder().encode(raw), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 const b64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
