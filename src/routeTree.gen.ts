@@ -9,7 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as IndexRouteImport } from './routes/index'\nimport { Route as ConfigurarPlanilhaCentralRouteImport } from './routes/configurar-planilha-central'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -29,10 +29,10 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/configurar-planilha-central'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/configurar-planilha-central'
+  id: '__root__' | '/' | '/configurar-planilha-central'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
