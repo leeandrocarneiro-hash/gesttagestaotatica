@@ -19,6 +19,7 @@ create table if not exists public.companies (
   tax_id text,
   contact_email text not null,
   phone text,
+  created_by uuid not null references auth.users(id),
   status text not null default 'pending' check (status in ('pending','approved','awaiting_sheet','active','rejected','blocked')),
   spreadsheet_id text,
   spreadsheet_url text,
@@ -41,6 +42,25 @@ create table if not exists public.company_members (
   created_at timestamptz not null default now(),
   unique (company_id, user_id)
 );
+
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  insert into public.profiles (id, full_name)
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', ''))
+  on conflict (id) do nothing;
+  return new;
+end;
+$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute procedure public.handle_new_auth_user();
 
 create index if not exists company_members_user_id_idx on public.company_members(user_id);
 create index if not exists companies_status_idx on public.companies(status);
@@ -98,7 +118,7 @@ for select to authenticated using (
 drop policy if exists "Authenticated users request company registration" on public.companies;
 create policy "Authenticated users request company registration" on public.companies
 for insert to authenticated with check (
-  status = 'pending' and spreadsheet_id is null and approved_by is null and approved_at is null
+  status = 'pending' and spreadsheet_id is null and approved_by is null and approved_at is null and created_by = auth.uid()
 );
 
 drop policy if exists "General admins manage companies" on public.companies;
@@ -109,6 +129,15 @@ drop policy if exists "Members read own memberships" on public.company_members;
 create policy "Members read own memberships" on public.company_members
 for select to authenticated using (
   user_id = auth.uid() or public.is_general_admin() or public.is_company_admin(company_id)
+);
+
+drop policy if exists "Company creator can add first admin" on public.company_members;
+create policy "Company creator can add first admin" on public.company_members
+for insert to authenticated with check (
+  user_id = auth.uid() and role = 'company_admin' and exists (
+    select 1 from public.companies c
+    where c.id = company_id and c.created_by = auth.uid() and c.status = 'pending'
+  )
 );
 
 drop policy if exists "Company admins manage their employees" on public.company_members;
