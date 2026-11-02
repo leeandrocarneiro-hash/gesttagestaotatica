@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
 import { InvoiceImportButton } from "@/components/InvoiceImportButton";
-import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
+import { getSession, doLogout } from "@/lib/auth.functions";
+import { redirect, useNavigate } from "@tanstack/react-router";
+import { STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
 
@@ -24,6 +26,12 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  beforeLoad: async () => {
+    const session = await getSession();
+    if (!session) throw redirect({ to: "/login" });
+    if (!session.spreadsheetId) throw redirect({ to: "/planilha-empresa" });
+    return { session };
+  },
   loader: ({ context }) => context.queryClient.ensureQueryData(dataQuery),
   component: Index,
   errorComponent: ({ error }) => (
@@ -70,6 +78,11 @@ const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--cha
 function Index() {
   const { data } = useSuspenseQuery(dataQuery);
   const qc = useQueryClient();
+  const { session } = Route.useRouteContext();
+  const navigate = useNavigate();
+  const logoutFn = useServerFn(doLogout);
+  const SHEET_URL = `https://docs.google.com/spreadsheets/d/${session.spreadsheetId}/edit`;
+  const SHEET_XLSX_URL = `https://docs.google.com/spreadsheets/d/${session.spreadsheetId}/export?format=xlsx`;
   const s = useSummary(data);
   const [tab, setTab] = useState<TabName | "Resumo">("Resumo");
   const [refreshing, setRefreshing] = useState(false);
@@ -98,7 +111,7 @@ function Index() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-2xl font-bold">Gestão de Serviços</h1>
+              <h1 className="text-2xl font-bold">{session.empresa}</h1>
               <p className="text-sm opacity-80">Tudo lançado aqui vai direto para sua planilha Google.</p>
             </div>
           </div>
@@ -120,6 +133,9 @@ function Index() {
             <ReportPdfButton data={data} />
             <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
               <a href={SHEET_XLSX_URL} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
+            </Button>
+            <Button variant="secondary" size="sm" onClick={async () => { await logoutFn(); qc.clear(); navigate({ to: "/login", replace: true }); }}>
+              Sair
             </Button>
           </div>
         </div>
