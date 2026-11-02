@@ -10,9 +10,9 @@ O Google Planilhas permanece como único armazenamento persistente de dados da a
 
 ## Planilha central definida
 
-O usuário forneceu a planilha central GESTTA: `14tacZ37LFI0fvjV82fMETF7smNT93gBcEwFr64Lgmgk`.
+O usuário forneceu a planilha central GESTTA: `1tsr54NQvjn3DzKQBs2EZSEcK7kleI6JU0PRZcXemvOI`.
 
-Link: https://docs.google.com/spreadsheets/d/14tacZ37LFI0fvjV82fMETF7smNT93gBcEwFr64Lgmgk/edit
+Link: https://docs.google.com/spreadsheets/d/1tsr54NQvjn3DzKQBs2EZSEcK7kleI6JU0PRZcXemvOI/edit
 
 O ID deve ser configurado no ambiente do servidor como `GESTTA_CENTRAL_SPREADSHEET_ID`. O acesso ainda precisa ser validado pela conexão Google Sheets usada pelo projeto; não presumir que o compartilhamento do link público autoriza o gateway.
 

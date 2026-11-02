@@ -78,7 +78,7 @@ export const updateRow = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const row = data.values.map((v) => {
       const n = Number(v);
-      return v !== "" && /^-?\d+(\.\d+)?$/.test(v) && !Number.isNaN(n) ? n : v;
+      return v !== "" && /^-?\\d+(\\.\\d+)?$/.test(v) && !Number.isNaN(n) ? n : v;
     });
     const startColumn = data.tab === "Servicos" ? "B" : "A";
     if (data.tab === "Materiais") {
