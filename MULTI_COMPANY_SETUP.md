@@ -8,6 +8,14 @@ O Google Planilhas permanece como único armazenamento persistente de dados da a
 - **Autenticação própria:** e-mail e senha GESTTA. A senha nunca pode ser salva em texto aberto; armazenar somente hash PBKDF2 com salt individual. Sessão em cookie HttpOnly, Secure e SameSite.
 - **Isolamento:** o navegador nunca escolhe nem envia o ID da planilha operacional. O servidor resolve esse ID a partir da sessão, do usuário ativo e da associação à empresa.
 
+## Planilha central definida
+
+O usuário forneceu a planilha central GESTTA: `1tsr54NQvjn3DzKQBs2EZSEcK7kleI6JU0PRZcXemvOI`.
+
+Link: https://docs.google.com/spreadsheets/d/1tsr54NQvjn3DzKQBs2EZSEcK7kleI6JU0PRZcXemvOI/edit
+
+O ID deve ser configurado no ambiente do servidor como `GESTTA_CENTRAL_SPREADSHEET_ID`. O acesso ainda precisa ser validado pela conexão Google Sheets usada pelo projeto; não presumir que o compartilhamento do link público autoriza o gateway.
+
 ## Abas da planilha central
 Criar estas abas com cabeçalho na linha 1:
 - `Empresas`: id, razao_social, nome_fantasia, cnpj, email_contato, telefone, status, spreadsheet_id, criado_em, aprovado_em, aprovado_por.
