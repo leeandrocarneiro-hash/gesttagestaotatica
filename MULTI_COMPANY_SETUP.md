@@ -35,7 +35,7 @@ Configurar no servidor:
 
 Nenhuma dessas variáveis deve ter prefixo `VITE_`.
 
-## Estado da implementação
+## Inicialização segura das abas centrais\n\n1. Configure no ambiente do servidor `GESTTA_CENTRAL_SPREADSHEET_ID` e `GESTTA_CENTRAL_SETUP_TOKEN` (token aleatório forte e temporário).\n2. Acesse `/configurar-planilha-central` e informe o token.\n3. A rotina verifica as quatro abas. Só grava o cabeçalho quando a primeira linha estiver totalmente vazia; se encontrar conteúdo diferente, interrompe sem sobrescrever. Se o cabeçalho já estiver correto, não altera a aba.\n4. Depois de concluir, remova `GESTTA_CENTRAL_SETUP_TOKEN` das variáveis do servidor.\n\n## Estado da implementação
 Esta branch remove a proposta anterior de Supabase e documenta a arquitetura aprovada. A integração completa ainda exige:
 1. Criar/configurar a planilha central e seus cabeçalhos.
 2. Definir o primeiro administrador geral e inicializar sua conta com um fluxo seguro.
