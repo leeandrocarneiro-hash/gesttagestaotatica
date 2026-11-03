@@ -13,6 +13,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const [setupRequired, setSetupRequired] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [setupError, setSetupError] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "setup">("login");
   const [companyName, setCompanyName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -29,11 +30,29 @@ function LoginPage() {
         if (result.required) setMode("setup");
       })
       .catch((error) => {
-        if (active) toast.error(error instanceof Error ? error.message : "Não foi possível verificar a configuração.");
+        if (active) {
+          const message = error instanceof Error ? error.message : "Não foi possível verificar a configuração.";
+          setSetupError(message);
+          toast.error(message);
+        }
       })
       .finally(() => { if (active) setCheckingSetup(false); });
     return () => { active = false; };
   }, []);
+
+  async function retrySetup() {
+    setCheckingSetup(true);
+    setSetupError(null);
+    try {
+      const result = await getSetupStatus();
+      setSetupRequired(result.required);
+      if (result.required) setMode("setup");
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : "Não foi possível verificar a configuração.");
+    } finally {
+      setCheckingSetup(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -66,6 +85,17 @@ function LoginPage() {
         </header>
         {checkingSetup ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Verificando a configuração...</p>
+        ) : setupError ? (
+          <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4" role="alert">
+            <p className="font-semibold">Não foi possível acessar a planilha do GESTTA</p>
+            <p className="text-sm text-muted-foreground">{setupError}</p>
+            <p className="text-sm text-muted-foreground">
+              Conecte o Google Sheets em Settings → Integrations e confira se o segredo GESTTA_SESSION_SECRET foi criado em More → Settings → Secrets.
+            </p>
+            <Button type="button" variant="outline" className="w-full" onClick={() => void retrySetup()}>
+              Tentar novamente
+            </Button>
+          </div>
         ) : (
           <>
             {setupRequired && (
