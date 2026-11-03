@@ -1,5 +1,4 @@
 import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
-import { verifyPassword, hashPassword } from "./password.server";
 import { TAB_NAMES, TABS } from "./sheets-config";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
@@ -7,7 +6,7 @@ const COOKIE = "gestta_central_session";
 const encoder = new TextEncoder();
 
 type Role = "general_admin" | "company_admin" | "employee";
-type User = { id: string; nome: string; email: string; passwordHash: string; passwordSalt: string; papel: Role; empresaId: string; ativo: string; permissoes: string };
+type User = { id: string; nome: string; email: string; password: string; papel: Role; empresaId: string; ativo: string; permissoes: string };
 
 function config() {
   const apiKey = process.env["LOVABLE_API_KEY"];
@@ -29,12 +28,11 @@ async function request(path: string, init?: RequestInit) {
   return response.json();
 }
 async function users(): Promise<User[]> {
-  const result = await request("/values/Usuarios!A2:K");
+  const result = await request("/values/Usuarios!A2:J");
   return ((result.values ?? []) as unknown[][]).map((r) => ({
-    id: String(r[0] ?? ""), nome: String(r[1] ?? ""), email: String(r[2] ?? "").toLowerCase(),
-    passwordHash: String(r[3] ?? ""), passwordSalt: String(r[4] ?? ""),
-    papel: String(r[5] ?? "") as Role, empresaId: String(r[6] ?? ""),
-    ativo: String(r[7] ?? ""), permissoes: String(r[8] ?? "{}"),
+    id: String(r[0] ?? ""), nome: String(r[1] ?? ""), email: String(r[2] ?? "").trim().toLowerCase(),
+    password: String(r[3] ?? ""), papel: String(r[4] ?? "") as Role, empresaId: String(r[5] ?? ""),
+    ativo: String(r[6] ?? ""), permissoes: String(r[7] ?? "{}"),
   }));
 }
 async function companies(): Promise<string[][]> {
@@ -62,7 +60,7 @@ async function setSession(userId: string) {
 export async function centralLogout() { deleteCookie(COOKIE, { path: "/" }); }
 export async function centralLogin(email: string, password: string, requiredRole?: Role, rejectGeneralAdmin = false) {
   const user = (await users()).find((u) => u.email === email.trim().toLowerCase());
-  if (!user || user.ativo.toUpperCase() !== "SIM" || !(await verifyPassword(password, user.passwordHash, user.passwordSalt))) throw new Error("E-mail ou senha incorretos.");
+  if (!user || user.ativo.toUpperCase() !== "SIM" || user.password !== password) throw new Error("E-mail ou senha incorretos.");
   if (requiredRole && user.papel !== requiredRole) throw new Error("Esta área é exclusiva do administrador geral.");
   if (rejectGeneralAdmin && user.papel === "general_admin") throw new Error("Use o acesso do administrador geral.");
   if (user.papel !== "general_admin") {
@@ -70,10 +68,10 @@ export async function centralLogin(email: string, password: string, requiredRole
     if (!company || company[6].toUpperCase() !== "ATIVA") throw new Error("Acesso da empresa indisponível. Entre em contato com o administrador.");
   }
   await setSession(user.id);
-  const userRows = await request("/values/Usuarios!A2:K");
+  const userRows = await request("/values/Usuarios!A2:J");
   const userIndex = ((userRows.values ?? []) as unknown[][]).findIndex((row) => String(row[0] ?? "") === user.id);
   if (userIndex >= 0) {
-    await request(`/values/Usuarios!K${userIndex + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [[new Date().toISOString()]] }) });
+    await request(`/values/Usuarios!J${userIndex + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [[new Date().toISOString()]] }) });
   }
   const companyRows = user.papel === "general_admin" ? [] : await companies();
   return { ok: true, role: user.papel, needsSheet: user.papel !== "general_admin" && !companyRows.some((r) => r[0] === user.empresaId && r[7]) };
@@ -224,10 +222,10 @@ export async function createCompanyAndAdmin(input: { razaoSocial: string; nomeFa
   const now = new Date().toISOString();
   const companyId = crypto.randomUUID();
   const userId = crypto.randomUUID();
-  const credentials = await hashPassword(input.senhaAdmin);
+  
   // A empresa nasce pendente: falha ao gravar o administrador nunca libera um cadastro incompleto.
   await append("Empresas", "A1:K1", [companyId, input.razaoSocial.trim(), input.nomeFantasia.trim(), normalizedCnpj, input.emailContato.trim().toLowerCase(), input.telefone.trim(), "PENDENTE", "", now, "", actor.email]);
-  await append("Usuarios", "A1:K1", [userId, input.nomeAdmin.trim(), normalizedEmail, credentials.passwordHash, credentials.passwordSalt, "company_admin", companyId, "SIM", "{}", now, ""]);
+  await append("Usuarios", "A1:K1", [userId, input.nomeAdmin.trim(), normalizedEmail, input.senhaAdmin, "company_admin", companyId, "SIM", "{}", now, ""]);
   const refreshedCompanies = await companies();
   const companyIndex = refreshedCompanies.findIndex((row) => row[0] === companyId);
   if (companyIndex < 0) throw new Error("Cadastro criado parcialmente: empresa pendente de reconciliação. Não tente cadastrar novamente; confira a aba Empresas.");

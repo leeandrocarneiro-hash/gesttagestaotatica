@@ -6,7 +6,7 @@ const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
 const HEADERS = {
   Empresas: ["id", "razao_social", "nome_fantasia", "cnpj", "email_contato", "telefone", "status", "spreadsheet_id", "criado_em", "aprovado_em", "aprovado_por"],
   Solicitacoes: ["id", "empresa_id", "solicitante_nome", "email", "telefone", "status", "criado_em", "analisado_em", "analisado_por"],
-  Usuarios: ["id", "nome", "email", "password_hash", "password_salt", "papel", "empresa_id", "ativo", "permissoes_json", "criado_em", "ultimo_acesso"],
+  Usuarios: ["id", "nome", "usuario", "senha", "papel", "empresa_id", "ativo", "permissoes_json", "criado_em", "ultimo_acesso"],
   Auditoria: ["id", "usuario_id", "empresa_id", "acao", "detalhes_json", "criado_em"],
 } as const;
 
@@ -83,8 +83,6 @@ export const initializeCentralSpreadsheet = createServerFn({ method: "POST" })
     return { ok: true, results };
   });
 
-import { hashPassword } from "./password.server";
-
 export const bootstrapGeneralAdmin = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({
     setupToken: z.string().min(1).max(300),
@@ -101,20 +99,20 @@ export const bootstrapGeneralAdmin = createServerFn({ method: "POST" })
     }
 
     const base = `${GATEWAY}/spreadsheets/${config.spreadsheetId}`;
-    const existing = await sheetsRequest(`${base}/values/Usuarios!A2:K`);
+    const existing = await sheetsRequest(`${base}/values/Usuarios!A2:J`);
     const users = (existing.values ?? []) as unknown[][];
-    if (users.some((row) => String(row[5] ?? "") === "general_admin")) {
+    if (users.some((row) => String(row[4] ?? "") === "general_admin")) {
       throw new Error("O administrador geral já foi configurado. O cadastro inicial está bloqueado.");
     }
 
-    const credentials = await hashPassword(data.senha);
+    
     const now = new Date().toISOString();
     const userId = crypto.randomUUID();
     const row = [
-      userId, data.nome, data.email.toLowerCase(), credentials.passwordHash,
-      credentials.passwordSalt, "general_admin", "", "SIM", "{}", now, "",
+      userId, data.nome, data.email.toLowerCase(), data.senha,
+      "general_admin", "", "SIM", "{}", now, "",
     ];
-    await sheetsRequest(`${base}/values/Usuarios!A1:K1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
+    await sheetsRequest(`${base}/values/Usuarios!A1:J1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
       method: "POST",
       body: JSON.stringify({ values: [row] }),
     });
