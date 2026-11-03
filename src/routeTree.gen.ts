@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 
@@ -18,7 +19,7 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const McpRoute = McpRouteImport.update({
+const LoginRoute = LoginRouteImport.update({\n  id: '/login',\n  path: '/login',\n  getParentRoute: () => rootRouteImport,\n} as any)\nconst McpRoute = McpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
   getParentRoute: () => rootRouteImport,
@@ -69,7 +70,7 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mcp': {
+    '/login': {\n      id: '/login'\n      path: '/login'\n      fullPath: '/login'\n      preLoaderRoute: typeof LoginRouteImport\n      parentRoute: typeof rootRouteImport\n    }\n    '/mcp': {
       id: '/mcp'
       path: '/mcp'
       fullPath: '/mcp'
@@ -87,7 +88,7 @@ declare module '@tanstack/react-router' {
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  IndexRoute: IndexRoute,\n  LoginRoute: LoginRoute,
   McpRoute: McpRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
