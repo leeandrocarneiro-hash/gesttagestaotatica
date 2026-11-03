@@ -1,6 +1,3 @@
-export const SPREADSHEET_ID = "1inU8c_VuiHPTUePSvbEGGrQpDVlG3pYwG6j4gMJcsPk";
-export const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`;
-export const SHEET_XLSX_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=xlsx`;
 
 export type FieldType = "text" | "date" | "number" | "select" | "servico" | "textarea";
 export type Field = { label: string; type: FieldType; options?: string[]; required?: boolean };
