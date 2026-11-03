@@ -20,7 +20,8 @@ export async function hashPassword(pw: string, saltB64?: string) {
 }
 
 export async function verifyPassword(pw: string, stored: string) {
-  if (!stored.startsWith("pbkdf2$")) return pw === stored;
+  stored = stored.trim();
+  if (!stored.startsWith("pbkdf2$")) return stored !== "" && pw.trim() === stored;
   const [, salt] = stored.split("$");
   if (!salt) return false;
   const h = await hashPassword(pw, salt);
@@ -68,10 +69,29 @@ export async function requireSession() {
   return s;
 }
 
-/** Rows of the master sheet: [ID, Empresa, Responsável, E-mail, Hash, ID Planilha, Criado em] */
+/** Rows of the master sheet: [ID, Empresa, Responsável, E-mail, Senha, ID Planilha, Criado em] */
 export async function listCompanies(): Promise<string[][]> {
   const j = await sheets(`/spreadsheets/${MASTER_SPREADSHEET_ID}/values/Empresas!A2:G`);
-  return ((j.values ?? []) as unknown[][]).map((r) => r.map((c) => String(c ?? "")));
+  return ((j.values ?? []) as unknown[][]).map((r) => r.map((c) => String(c ?? "").trim()));
+}
+
+/** Keeps the password column as plain text so values like "0123" keep their leading zeros when edited in the sheet. */
+async function ensurePasswordColumnIsText() {
+  const meta = await sheets(`/spreadsheets/${MASTER_SPREADSHEET_ID}?fields=sheets.properties`);
+  const sh = (meta.sheets ?? []).find((s: { properties: { title: string } }) => s.properties.title === "Empresas");
+  if (!sh) return;
+  await sheets(`/spreadsheets/${MASTER_SPREADSHEET_ID}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: [{
+        repeatCell: {
+          range: { sheetId: sh.properties.sheetId, startRowIndex: 1, startColumnIndex: 4, endColumnIndex: 5 },
+          cell: { userEnteredFormat: { numberFormat: { type: "TEXT" } } },
+          fields: "userEnteredFormat.numberFormat",
+        },
+      }],
+    }),
+  });
 }
 
 export async function appendCompany(row: string[]) {
@@ -79,4 +99,14 @@ export async function appendCompany(row: string[]) {
     `/spreadsheets/${MASTER_SPREADSHEET_ID}/values/Empresas!A1:G1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     { method: "POST", body: JSON.stringify({ values: [row] }) },
   );
+  await ensurePasswordColumnIsText().catch((e) => console.error("Formatar coluna Senha falhou", e));
+}
+
+/** Writes a visible (plain-text) password into the company's row. rowIndex is 0-based within listCompanies(). */
+export async function setCompanyPassword(rowIndex: number, password: string) {
+  await sheets(`/spreadsheets/${MASTER_SPREADSHEET_ID}/values/Empresas!E${rowIndex + 2}?valueInputOption=RAW`, {
+    method: "PUT",
+    body: JSON.stringify({ values: [[password]] }),
+  });
+  await ensurePasswordColumnIsText().catch((e) => console.error("Formatar coluna Senha falhou", e));
 }
