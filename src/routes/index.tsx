@@ -26,7 +26,7 @@ export const Route = createFileRoute("/")({
       { title: "Gestão de Serviços — Agenda, custos e lucro" },
       { name: "description", content: "Controle serviços agendados, atendimentos, materiais, recebimentos, despesas e lucro por serviço, com controle financeiro integrado." },
       { property: "og:title", content: "Gestão de Serviços — Agenda, custos e lucro" },
-      { property: "og:description", content: "Lance tudo no site e baixe a planilha com gráficos para reuniões." },
+      { property: "og:description", content: "Controle financeiro, serviços e resultados da sua empresa no GESTTA." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/")({
   component: Index,
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-lg p-8 text-center">
-      <h1 className="text-xl font-semibold">Não foi possível ler a planilha</h1>
+      <h1 className="text-xl font-semibold">Não foi possível carregar os dados do GESTTA</h1>
       <p className="mt-2 text-sm text-muted-foreground">{(error as Error).message}</p>
     </div>
   ),
@@ -84,8 +84,7 @@ function Index() {
   const [tab, setTab] = useState<TabName | "Resumo">("Resumo");
   const [refreshing, setRefreshing] = useState(false);
 
-  // Revalida os dados quando o usuário retorna de uma aba externa (Google Sheets/XLSX).
-  // Isso força os gráficos do Recharts a renderizarem novamente após a troca de foco.
+  // Atualiza os dados quando o usuário retorna à aba do GESTTA.
   useEffect(() => {
     const refreshOnReturn = () => {
       if (document.visibilityState === "visible") {
