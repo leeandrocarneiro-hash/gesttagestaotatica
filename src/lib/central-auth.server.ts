@@ -1,292 +1,435 @@
 import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
 import { verifyPassword, hashPassword } from "./password.server";
-import { TAB_NAMES, TABS } from "./sheets-config";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
+const DEFAULT_SPREADSHEET_ID = "1inU8c_VuiHPTUePSvbEGGrQpDVlG3pYwG6j4gMJcsPk";
 const COOKIE = "gestta_central_session";
 const encoder = new TextEncoder();
 
-type Role = "general_admin" | "company_admin" | "employee";
-type User = { id: string; nome: string; email: string; passwordHash: string; passwordSalt: string; papel: Role; empresaId: string; ativo: string; permissoes: string };
+export type Role = "general_admin" | "company_admin" | "employee";
+export type CentralUser = {
+  id: string;
+  nome: string;
+  email: string;
+  passwordHash: string;
+  passwordSalt: string;
+  papel: Role;
+  empresaId: string;
+  ativo: string;
+  permissoes: string;
+};
+
+const BUSINESS_TABS = {
+  Servicos: {
+    headers: ["ID", "Data agendada", "Cliente", "Telefone", "Descrição do serviço", "Status", "Preço cobrado", "Observações"],
+    rangeEnd: "J",
+  },
+  Atendimentos: {
+    headers: ["Data", "Cliente", "Contato", "Canal", "Assunto", "Observações"],
+    rangeEnd: "H",
+  },
+  Materiais: {
+    headers: ["Data", "ID Serviço", "Material", "Fornecedor", "Quantidade", "Custo unitário", "Total"],
+    rangeEnd: "I",
+  },
+  Recebimentos: {
+    headers: ["Data", "ID Serviço", "Cliente", "Valor", "Forma de pagamento"],
+    rangeEnd: "G",
+  },
+  Despesas: {
+    headers: ["Data", "ID Serviço", "Categoria", "Descrição", "Valor"],
+    rangeEnd: "G",
+  },
+} as const;
+
+const SUPPORT_HEADERS: Record<string, string[]> = {
+  Empresas: ["ID", "Razão social", "Nome fantasia", "CNPJ", "E-mail de contato", "Telefone", "Status", "Planilha compartilhada", "Criado em", "Atualizado em", "Criado por"],
+  Usuarios: ["ID", "Nome", "E-mail", "Hash da senha", "Salt da senha", "Papel", "Empresa ID", "Ativo", "Permissões", "Criado em", "Último acesso"],
+  Auditoria: ["ID", "Usuário ID", "Empresa ID", "Ação", "Detalhes", "Data"],
+};
 
 function config() {
   const apiKey = process.env["LOVABLE_API_KEY"];
   const connectionKey = process.env["GOOGLE_SHEETS_API_KEY"];
-  const spreadsheetId = process.env["GESTTA_CENTRAL_SPREADSHEET_ID"];
-  if (!apiKey || ! connectionKey || !spreadsheetId) throw new Error("Conexão da planilha central não configurada no servidor.");
+  const spreadsheetId = process.env["GESTTA_CENTRAL_SPREADSHEET_ID"] || DEFAULT_SPREADSHEET_ID;
+  if (!apiKey || !connectionKey) {
+    throw new Error("A conexão Google Sheets do GESTTA não está configurada no servidor. Configure LOVABLE_API_KEY e GOOGLE_SHEETS_API_KEY.");
+  }
   return { apiKey, connectionKey, spreadsheetId };
 }
-async function request(path: string, init?: RequestInit) {
+
+function headers() {
+  const c = config();
+  return {
+    Authorization: `Bearer ${c.apiKey}`,
+    "X-Connection-Api-Key": c.connectionKey,
+    "Content-Type": "application/json",
+  };
+}
+
+async function request(path: string, init?: RequestInit): Promise<any> {
   const c = config();
   const response = await fetch(`${GATEWAY}/spreadsheets/${c.spreadsheetId}${path}`, {
-    ...init, headers: { Authorization: `Bearer ${c.apiKey}`, "X-Connection-Api-Key": c.connectionKey, "Content-Type": "application/json" },
+    ...init,
+    headers: { ...headers(), ...(init?.headers ?? {}) },
   });
   if (!response.ok) {
     const detail = await response.text();
-    console.error("Central Sheets request failed", response.status, detail);
-    throw new Error("Falha ao acessar os cadastros centrais do GESTTA.");
+    console.error("GESTTA Google Sheets request failed", response.status, detail);
+    throw new Error("Não foi possível acessar a planilha compartilhada do GESTTA.");
   }
+  if (response.status === 204) return {};
   return response.json();
 }
-async function users(): Promise<User[]> {
-  const result = await request("/values/Usuarios!A2:K");
-  return ((result.values ?? []) as unknown[][]).map((r) => ({
-    id: String(r[0] ?? ""), nome: String(r[1] ?? ""), email: String(r[2] ?? "").toLowerCase(),
-    passwordHash: String(r[3] ?? ""), passwordSalt: String(r[4] ?? ""),
-    papel: String(r[5] ?? "") as Role, empresaId: String(r[6] ?? ""),
-    ativo: String(r[7] ?? ""), permissoes: String(r[8] ?? "{}"),
+
+async function readRange(range: string): Promise<string[][]> {
+  const result = await request(`/values/${encodeURIComponent(range)}`);
+  return ((result.values ?? []) as unknown[][]).map((row) => row.map((value) => String(value ?? "")));
+}
+
+async function writeRange(range: string, values: (string | number)[][]) {
+  return request(`/values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
+    method: "PUT",
+    body: JSON.stringify({ values }),
+  });
+}
+
+async function append(tab: string, values: (string | number)[]) {
+  return request(`/values/${encodeURIComponent(tab + "!A1:Z1")}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
+    method: "POST",
+    body: JSON.stringify({ values: [values] }),
+  });
+}
+
+function columnName(index: number): string {
+  let value = index + 1;
+  let output = "";
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    output = String.fromCharCode(65 + remainder) + output;
+    value = Math.floor((value - 1) / 26);
+  }
+  return output;
+}
+
+async function sheetMetadata(): Promise<{ title: string; sheetId: number }[]> {
+  const data = await request("?fields=sheets.properties.sheetId,sheets.properties.title");
+  return (data.sheets ?? []).map((sheet: any) => ({
+    title: String(sheet.properties?.title ?? ""),
+    sheetId: Number(sheet.properties?.sheetId ?? -1),
   }));
 }
+
+/**
+ * Adds only the GESTTA support tabs and two technical columns at the END
+ * of operational tabs. Existing business columns and the Resumo tab are kept.
+ */
+export async function ensureSharedSchema() {
+  const metadata = await sheetMetadata();
+  const existing = new Set(metadata.map((sheet) => sheet.title));
+  const required = [...Object.keys(SUPPORT_HEADERS), ...Object.keys(BUSINESS_TABS)];
+  const missing = required.filter((title) => !existing.has(title));
+  if (missing.length) {
+    const result = await request(":batchUpdate", {
+      method: "POST",
+      body: JSON.stringify({
+        requests: missing.map((title) => ({ addSheet: { properties: { title } } })),
+      }),
+    });
+    void result;
+  }
+
+  for (const [tab, expected] of Object.entries(SUPPORT_HEADERS)) {
+    const values = await readRange(`${tab}!A1:K1`);
+    const current = values[0] ?? [];
+    if (!current.length || current.every((value) => !value)) {
+      await writeRange(`${tab}!A1:K1`, [expected]);
+    } else if (expected.some((value, index) => current[index] !== value)) {
+      throw new Error(`A aba ${tab} já existe com cabeçalhos diferentes. Nenhum dado foi sobrescrito.`);
+    }
+  }
+
+  for (const [tab, schema] of Object.entries(BUSINESS_TABS)) {
+    const values = await readRange(`${tab}!A1:Z1`);
+    const current = values[0] ?? [];
+    if (schema.headers.some((value, index) => current[index] !== value)) {
+      throw new Error(`Os cabeçalhos da aba ${tab} não correspondem ao padrão atual. Nenhum lançamento foi alterado.`);
+    }
+    const idColumn = schema.headers.length;
+    const companyColumn = idColumn + 1;
+    const idHeader = current[idColumn] ?? "";
+    const companyHeader = current[companyColumn] ?? "";
+    if (idHeader && idHeader !== "GESTTA_ID") {
+      throw new Error(`A coluna ${columnName(idColumn)} da aba ${tab} já contém outro cabeçalho. Não vou sobrescrever essa coluna.`);
+    }
+    if (companyHeader && companyHeader !== "Empresa ID") {
+      throw new Error(`A coluna ${columnName(companyColumn)} da aba ${tab} já contém outro cabeçalho. Não vou sobrescrever essa coluna.`);
+    }
+    if (idHeader !== "GESTTA_ID" || companyHeader !== "Empresa ID") {
+      await writeRange(`${tab}!${columnName(idColumn)}1:${columnName(companyColumn)}1`, [["GESTTA_ID", "Empresa ID"]]);
+    }
+  }
+}
+
+async function users(): Promise<CentralUser[]> {
+  const rows = await readRange("Usuarios!A2:K");
+  return rows.map((row) => ({
+    id: row[0] ?? "",
+    nome: row[1] ?? "",
+    email: (row[2] ?? "").toLowerCase(),
+    passwordHash: row[3] ?? "",
+    passwordSalt: row[4] ?? "",
+    papel: (row[5] ?? "") as Role,
+    empresaId: row[6] ?? "",
+    ativo: row[7] ?? "",
+    permissoes: row[8] ?? "{}",
+  })).filter((user) => user.id);
+}
+
 async function companies(): Promise<string[][]> {
-  const result = await request("/values/Empresas!A2:K");
-  return ((result.values ?? []) as unknown[][]).map((r) => r.map((v) => String(v ?? "")));
+  return readRange("Empresas!A2:K");
 }
-async function append(tab: string, range: string, values: (string | number)[]) {
-  await request(`/values/${tab}!${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values: [values] }) });
+
+async function audit(actor: CentralUser, action: string, details: Record<string, unknown>, empresaId = actor.empresaId) {
+  await append("Auditoria", [crypto.randomUUID(), actor.id, empresaId, action, JSON.stringify(details), new Date().toISOString()]);
 }
-async function audit(actor: User, action: string, details: Record<string, unknown>, empresaId = actor.empresaId) {
-  await append("Auditoria", "A1:F1", [crypto.randomUUID(), actor.id, empresaId, action, JSON.stringify(details), new Date().toISOString()]);
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
-async function secretKey() {
+
+async function sessionSecretKey() {
   const secret = process.env["GESTTA_SESSION_SECRET"];
-  if (!secret || encoder.encode(secret).length < 32) throw new Error("GESTTA_SESSION_SECRET deve ter pelo menos 32 bytes aleatórios.");
+  if (!secret || encoder.encode(secret).length < 32) {
+    throw new Error("GESTTA_SESSION_SECRET deve ter pelo menos 32 caracteres aleatórios.");
+  }
   return crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
-function b64(bytes: ArrayBuffer) { return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_"); }
-async function signature(payload: string) { return b64(await crypto.subtle.sign("HMAC", await secretKey(), encoder.encode(payload))); }
+
 async function setSession(userId: string) {
   const payload = JSON.stringify({ sub: userId, exp: Date.now() + 8 * 60 * 60 * 1000 });
-  const token = btoa(unescape(encodeURIComponent(payload)));
-  setCookie(COOKIE, `${token}.${await signature(payload)}`, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 8 * 60 * 60 });
+  const signature = await crypto.subtle.sign("HMAC", await sessionSecretKey(), encoder.encode(payload));
+  const token = encodeBase64Url(encoder.encode(payload));
+  const signed = encodeBase64Url(new Uint8Array(signature));
+  setCookie(COOKIE, `${token}.${signed}`, {
+    httpOnly: true,
+    secure: process.env["NODE_ENV"] !== "development",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 8 * 60 * 60,
+  });
 }
-export async function centralLogout() { deleteCookie(COOKIE, { path: "/" }); }
-export async function centralLogin(email: string, password: string, requiredRole?: Role, rejectGeneralAdmin = false) {
-  const user = (await users()).find((u) => u.email === email.trim().toLowerCase());
-  if (!user || user.ativo.toUpperCase() !== "SIM" || !(await verifyPassword(password, user.passwordHash, user.passwordSalt))) throw new Error("E-mail ou senha incorretos.");
-  if (requiredRole && user.papel !== requiredRole) throw new Error("Esta área é exclusiva do administrador geral.");
-  if (rejectGeneralAdmin && user.papel === "general_admin") throw new Error("Use o acesso do administrador geral.");
-  if (user.papel !== "general_admin") {
-    const company = (await companies()).find((r) => r[0] === user.empresaId);
-    if (!company || company[6].toUpperCase() !== "ATIVA") throw new Error("Acesso da empresa indisponível. Entre em contato com o administrador.");
-  }
-  await setSession(user.id);
-  const userRows = await request("/values/Usuarios!A2:K");
-  const userIndex = ((userRows.values ?? []) as unknown[][]).findIndex((row) => String(row[0] ?? "") === user.id);
-  if (userIndex >= 0) {
-    await request(`/values/Usuarios!K${userIndex + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [[new Date().toISOString()]] }) });
-  }
-  const companyRows = user.papel === "general_admin" ? [] : await companies();
-  return { ok: true, role: user.papel, needsSheet: user.papel !== "general_admin" && !companyRows.some((r) => r[0] === user.empresaId && r[7]) };
+
+export async function centralLogout() {
+  deleteCookie(COOKIE, { path: "/" });
 }
-export async function currentCentralUser(): Promise<User | null> {
+
+function decodeBase64Url(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+export async function currentCentralUser(): Promise<CentralUser | null> {
   const cookie = getCookie(COOKIE);
   if (!cookie) return null;
-  const [encoded, sig] = cookie.split(".");
-  if (!encoded || !sig) return null;
+  const [encoded, signature] = cookie.split(".");
+  if (!encoded || !signature) return null;
   try {
-    const payload = decodeURIComponent(escape(atob(encoded)));
-    const normalizedSignature = sig.replace(/-/g, "+").replace(/_/g, "/");
-    const signatureBytes = Uint8Array.from(
-      atob(normalizedSignature + "=".repeat((4 - (normalizedSignature.length % 4)) % 4)),
-      (character) => character.charCodeAt(0),
+    const payloadBytes = decodeBase64Url(encoded);
+    const payload = new TextDecoder().decode(payloadBytes);
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      await sessionSecretKey(),
+      decodeBase64Url(signature),
+      encoder.encode(payload),
     );
-    const validSignature = await crypto.subtle.verify("HMAC", await secretKey(), signatureBytes, encoder.encode(payload));
-    if (!validSignature) return null;
+    if (!valid) return null;
     const session = JSON.parse(payload) as { sub: string; exp: number };
     if (!session.sub || session.exp < Date.now()) return null;
-    const user = (await users()).find((u) => u.id === session.sub && u.ativo.toUpperCase() === "SIM");
+    const user = (await users()).find((item) => item.id === session.sub && item.ativo.toUpperCase() === "SIM");
     if (!user) return null;
     if (user.papel !== "general_admin") {
-      const company = (await companies()).find((r) => r[0] === user.empresaId);
-      if (!company || company[6].toUpperCase() !== "ATIVA") return null;
+      const company = (await companies()).find((row) => row[0] === user.empresaId);
+      if (!company || (company[6] ?? "").toUpperCase() !== "ATIVA") return null;
     }
     return user;
-  } catch { return null; }
-}
-
-function extractSpreadsheetId(link: string) {
-  const match = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/) || link.trim().match(/^([a-zA-Z0-9_-]{30,})$/);
-  return match?.[1] ?? null;
-}
-function companySheetHeaders(tab: (typeof TAB_NAMES)[number]) {
-  if (tab === "Servicos") return ["ID", ...TABS.Servicos.fields.map((field) => field.label)];
-  if (tab === "Materiais") return [...TABS.Materiais.fields.map((field) => field.label), "Total"];
-  return TABS[tab].fields.map((field) => field.label);
-}
-export async function currentCompanyLabel(): Promise<string> {
-  const user = await currentCentralUser();
-  if (!user || user.papel === "general_admin") return "";
-  const row = (await companies()).find((company) => company[0] === user.empresaId);
-  return row?.[2] || row?.[1] || user.empresaId;
-}
-export async function requireCurrentCompanySheet(): Promise<string> {
-  const user = await currentCentralUser();
-  if (!user || user.papel === "general_admin") throw new Error("Entre com uma conta de empresa para acessar os dados.");
-  const row = (await companies()).find((company) => company[0] === user.empresaId);
-  if (!row || row[6].toUpperCase() !== "ATIVA") throw new Error("A empresa está bloqueada ou não está disponível.");
-  if (!row[7]) throw new Error("Vincule a planilha da empresa para continuar.");
-  return row[7];
-}
-export async function saveCurrentCompanySheet(link: string) {
-  const user = await currentCentralUser();
-  if (!user || user.papel !== "company_admin") throw new Error("Somente o administrador da empresa pode vincular ou trocar a planilha.");
-  const companyRows = await companies();
-  const companyIndex = companyRows.findIndex((row) => row[0] === user.empresaId);
-  if (companyIndex < 0 || companyRows[companyIndex][6].toUpperCase() !== "ATIVA") throw new Error("Empresa não encontrada ou bloqueada.");
-  const spreadsheetId = extractSpreadsheetId(link);
-  if (!spreadsheetId) throw new Error("Link inválido. Cole o endereço completo de uma planilha Google.");
-  const centralSpreadsheetId = config().spreadsheetId;
-  if (spreadsheetId === centralSpreadsheetId) throw new Error("A planilha central não pode ser usada como planilha operacional.");
-  if (companyRows.some((row, index) => index !== companyIndex && row[7] === spreadsheetId)) throw new Error("Essa planilha já está vinculada a outra empresa.");
-  let metadata: { sheets?: { properties: { title: string } }[] };
-  try {
-    metadata = await fetch(`${GATEWAY}/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`, {
-      headers: { Authorization: `Bearer ${config().apiKey}`, "X-Connection-Api-Key": config().connectionKey },
-    }).then(async (response) => {
-      if (!response.ok) throw new Error("unavailable");
-      return response.json();
-    });
   } catch {
-    throw new Error("Não consegui acessar essa planilha. Compartilhe-a com a conta Google conectada ao GESTTA com permissão de Editor.");
+    return null;
   }
-  const existing = new Set((metadata.sheets ?? []).map((sheet) => sheet.properties.title));
-  const missing = TAB_NAMES.filter((tab) => !existing.has(tab));
-  if (missing.length) {
-    const addResponse = await fetch(GATEWAY + "/spreadsheets/" + spreadsheetId + ":batchUpdate", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + config().apiKey, "X-Connection-Api-Key": config().connectionKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ requests: missing.map((title) => ({ addSheet: { properties: { title } } })) }),
-    });
-    if (!addResponse.ok) throw new Error("Não foi possível criar as abas necessárias na planilha.");
+}
+
+export async function centralLogin(email: string, password: string) {
+  const user = (await users()).find((item) => item.email === email.trim().toLowerCase());
+  if (!user || user.ativo.toUpperCase() !== "SIM" || !(await verifyPassword(password, user.passwordHash, user.passwordSalt))) {
+    throw new Error("E-mail ou senha incorretos.");
   }
-  const ranges = TAB_NAMES.map((tab) => "ranges=" + encodeURIComponent(tab + "!A1:Z1")).join("&");
-  const headerResponse = await fetch(GATEWAY + "/spreadsheets/" + spreadsheetId + "/values:batchGet?" + ranges, {
-    headers: { Authorization: "Bearer " + config().apiKey, "X-Connection-Api-Key": config().connectionKey },
-  });
-  if (!headerResponse.ok) throw new Error("Não foi possível verificar os cabeçalhos das abas.");
-  const headerData = await headerResponse.json();
-  const headerUpdates = TAB_NAMES.flatMap((tab, index) => {
-    const current = (headerData.valueRanges?.[index]?.values?.[0] ?? []) as unknown[];
-    const expected = companySheetHeaders(tab);
-    const normalized = current.map((value) => String(value ?? "").trim());
-    if (normalized.some((value) => value !== "")) {
-      const matches = normalized.length === expected.length && expected.every((value, column) => normalized[column] === value);
-      if (!matches) throw new Error("A aba " + tab + " já possui cabeçalhos diferentes do padrão GESTTA. Nenhum dado foi sobrescrito; ajuste os cabeçalhos antes de vincular.");
-      return [];
+  if (user.papel !== "general_admin") {
+    const company = (await companies()).find((row) => row[0] === user.empresaId);
+    if (!company || (company[6] ?? "").toUpperCase() !== "ATIVA") {
+      throw new Error("O acesso desta empresa está bloqueado. Entre em contato com o administrador do GESTTA.");
     }
-    return [{ range: tab + "!A1", values: [expected] }];
-  });
-  if (headerUpdates.length) {
-    const writeResponse = await fetch(GATEWAY + "/spreadsheets/" + spreadsheetId + "/values:batchUpdate", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + config().apiKey, "X-Connection-Api-Key": config().connectionKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ valueInputOption: "RAW", data: headerUpdates }),
-    });
-    if (!writeResponse.ok) throw new Error("Não foi possível preparar os cabeçalhos das abas.");
   }
-  await request(`/values/Empresas!H${companyIndex + 2}?valueInputOption=RAW`, {
-    method: "PUT", body: JSON.stringify({ values: [[spreadsheetId]] }),
-  });
-  try { await audit(user, "link_company_spreadsheet", { spreadsheetId }, user.empresaId); }
-  catch (error) { console.error("Planilha vinculada, mas auditoria falhou.", error); }
-  return { ok: true };
+  await setSession(user.id);
+  return { ok: true, role: user.papel };
 }
 
-
-async function createCompanySpreadsheet(companyName: string): Promise<string> {
-  const c = config();
-  const response = await fetch(GATEWAY + "/spreadsheets", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${c.apiKey}`, "X-Connection-Api-Key": c.connectionKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ properties: { title: `GESTTA - ${companyName}` } }),
-  });
-  if (!response.ok) {
-    console.error("Google Sheets create failed", response.status, await response.text());
-    throw new Error("A conexão Google do GESTTA não conseguiu criar uma planilha. Verifique as permissões do Google Drive/Sheets.");
-  }
-  const created = await response.json() as { spreadsheetId?: string };
-  const spreadsheetId = created.spreadsheetId;
-  if (!spreadsheetId || spreadsheetId === c.spreadsheetId) throw new Error("O Google não retornou um ID válido para a nova planilha.");
-  const init = await fetch(`${GATEWAY}/spreadsheets/${spreadsheetId}:batchUpdate`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${c.apiKey}`, "X-Connection-Api-Key": c.connectionKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ requests: TAB_NAMES.map((tab) => ({ addSheet: { properties: { title: tab } } })) }),
-  });
-  if (!init.ok) {
-    console.error("Company spreadsheet initialization failed", init.status, await init.text());
-    throw new Error("A planilha foi criada, mas não foi possível inicializar as abas. O cadastro ficará pendente para correção.");
-  }
-  const data = TAB_NAMES.map((tab) => ({ range: `${tab}!A1`, values: [tab === "Servicos" ? ["ID", ...TABS.Servicos.fields.map((field) => field.label)] : tab === "Materiais" ? [...TABS.Materiais.fields.map((field) => field.label), "Total"] : TABS[tab].fields.map((field) => field.label)] }));
-  const write = await fetch(`${GATEWAY}/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${c.apiKey}`, "X-Connection-Api-Key": c.connectionKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ valueInputOption: "RAW", data }),
-  });
-  if (!write.ok) {
-    console.error("Company spreadsheet headers failed", write.status, await write.text());
-    throw new Error("A planilha foi criada, mas não foi possível preparar os cabeçalhos. O cadastro ficará pendente para correção.");
-  }
-  return spreadsheetId;
+export async function hasInitialSetup(): Promise<boolean> {
+  return (await users()).length === 0;
 }
 
-export async function registerCompanyAccount(input: { companyName: string; displayName: string; email: string; password: string }) {
-  const normalizedEmail = input.email.trim().toLowerCase();
-  if ((await users()).some((user) => user.email === normalizedEmail)) throw new Error("Não foi possível concluir o cadastro. Verifique os dados informados.");
+/** First registration creates the global administrator and adopts legacy rows for the first company. */
+export async function registerInitialAdministrator(input: {
+  companyName: string;
+  displayName: string;
+  email: string;
+  password: string;
+}) {
+  await ensureSharedSchema();
+  if ((await users()).length > 0) throw new Error("A configuração inicial já foi concluída. Solicite a criação de acessos ao administrador geral.");
   const companyId = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const now = new Date().toISOString();
+  const email = input.email.trim().toLowerCase();
   const credentials = await hashPassword(input.password);
-  await append("Empresas", "A1:K1", [companyId, input.companyName.trim(), input.companyName.trim(), "", normalizedEmail, "", "PENDENTE", "", now, "", "self-service"]);
-  await append("Usuarios", "A1:K1", [userId, input.displayName.trim(), normalizedEmail, credentials.passwordHash, credentials.passwordSalt, "company_admin", companyId, "SIM", "{}", now, ""]);
-  const rows = await companies();
-  const index = rows.findIndex((row) => row[0] === companyId);
-  if (index < 0) throw new Error("Cadastro pendente de reconciliação. Não tente criar outra conta com o mesmo e-mail.");
-  const spreadsheetId = await createCompanySpreadsheet(input.companyName.trim());
-  await request(`/values/Empresas!H${index + 2}:J${index + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [[spreadsheetId, now, "self-service"]] }) });
-  await request(`/values/Empresas!G${index + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [["ATIVA"]] }) });
+
+  await append("Empresas", [
+    companyId, input.companyName.trim(), input.companyName.trim(), "", email, "", "ATIVA",
+    config().spreadsheetId, now, now, "configuração inicial",
+  ]);
+  await append("Usuarios", [
+    userId, input.displayName.trim(), email, credentials.passwordHash, credentials.passwordSalt,
+    "general_admin", companyId, "SIM", "{}", now, "",
+  ]);
+
+  await migrateLegacyRows(companyId);
   await setSession(userId);
-  return { ok: true, companyId };
+  return { ok: true };
 }
 
-export async function requireGeneralAdmin() {
+/** Assigns only currently unassigned historical rows to the first company. */
+async function migrateLegacyRows(companyId: string) {
+  const ranges = Object.entries(BUSINESS_TABS).map(([tab, schema]) => `ranges=${encodeURIComponent(tab + "!A2:" + schema.rangeEnd)}`).join("&");
+  const data = await request(`/values:batchGet?${ranges}`);
+  const updates: { range: string; values: string[][] }[] = [];
+
+  Object.entries(BUSINESS_TABS).forEach(([tab, schema], index) => {
+    const rows = (data.valueRanges?.[index]?.values ?? []) as unknown[][];
+    const idCol = schema.headers.length;
+    const companyCol = idCol + 1;
+    rows.forEach((rawRow, rowIndex) => {
+      const row = rawRow.map((value) => String(value ?? ""));
+      if (!row.slice(0, schema.headers.length).some((value) => value !== "")) return;
+      const existingId = row[idCol] ?? "";
+      const existingCompany = row[companyCol] ?? "";
+      if (existingCompany && existingCompany !== companyId) return;
+      if (existingId && existingCompany) return;
+      const technicalId = existingId || crypto.randomUUID();
+      const sheetRow = rowIndex + 2;
+      updates.push({
+        range: `${tab}!${columnName(idCol)}${sheetRow}:${columnName(companyCol)}${sheetRow}`,
+        values: [[technicalId, companyId]],
+      });
+    });
+  });
+
+  if (updates.length) {
+    await request("/values:batchUpdate", {
+      method: "POST",
+      body: JSON.stringify({ valueInputOption: "RAW", data: updates }),
+    });
+  }
+}
+
+export async function currentCompanyLabel(): Promise<string> {
+  const user = await currentCentralUser();
+  if (!user) return "";
+  const row = (await companies()).find((company) => company[0] === user.empresaId);
+  return row?.[2] || row?.[1] || "Minha empresa";
+}
+
+export async function requireCurrentCompanySheet(): Promise<{ spreadsheetId: string; companyId: string }> {
+  const user = await currentCentralUser();
+  if (!user || !user.empresaId) throw new Error("Sua sessão expirou. Entre novamente.");
+  if (user.papel !== "general_admin") {
+    const row = (await companies()).find((company) => company[0] === user.empresaId);
+    if (!row || (row[6] ?? "").toUpperCase() !== "ATIVA") {
+      throw new Error("A empresa está bloqueada ou não está disponível.");
+    }
+  }
+  return { spreadsheetId: config().spreadsheetId, companyId: user.empresaId };
+}
+
+export async function requireGeneralAdmin(): Promise<CentralUser> {
   const user = await currentCentralUser();
   if (!user || user.papel !== "general_admin") throw new Error("Acesso restrito ao administrador geral.");
   return user;
 }
-export async function createCompanyAndAdmin(input: { razaoSocial: string; nomeFantasia: string; cnpj: string; emailContato: string; telefone: string; nomeAdmin: string; emailAdmin: string; senhaAdmin: string }) {
+
+export async function createCompanyAndAdmin(input: {
+  razaoSocial: string;
+  nomeFantasia: string;
+  cnpj: string;
+  emailContato: string;
+  telefone: string;
+  nomeAdmin: string;
+  emailAdmin: string;
+  senhaAdmin: string;
+}) {
   const actor = await requireGeneralAdmin();
   const allCompanies = await companies();
   const allUsers = await users();
   const normalizedCnpj = input.cnpj.replace(/\D/g, "");
   const normalizedEmail = input.emailAdmin.trim().toLowerCase();
-  if (allCompanies.some((r) => normalizedCnpj && String(r[3] ?? "").replace(/\D/g, "") === normalizedCnpj)) throw new Error("Já existe uma empresa cadastrada com esse CNPJ.");
-  if (allUsers.some((u) => u.email === normalizedEmail)) throw new Error("Já existe um usuário com esse e-mail.");
+  if (allCompanies.some((row) => normalizedCnpj && String(row[3] ?? "").replace(/\D/g, "") === normalizedCnpj)) {
+    throw new Error("Já existe uma empresa cadastrada com esse CNPJ.");
+  }
+  if (allUsers.some((user) => user.email === normalizedEmail)) throw new Error("Já existe um usuário com esse e-mail.");
+
   const now = new Date().toISOString();
   const companyId = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const credentials = await hashPassword(input.senhaAdmin);
-  // A empresa nasce pendente: falha ao gravar o administrador nunca libera um cadastro incompleto.
-  await append("Empresas", "A1:K1", [companyId, input.razaoSocial.trim(), input.nomeFantasia.trim(), normalizedCnpj, input.emailContato.trim().toLowerCase(), input.telefone.trim(), "PENDENTE", "", now, "", actor.email]);
-  await append("Usuarios", "A1:K1", [userId, input.nomeAdmin.trim(), normalizedEmail, credentials.passwordHash, credentials.passwordSalt, "company_admin", companyId, "SIM", "{}", now, ""]);
-  const refreshedCompanies = await companies();
-  const companyIndex = refreshedCompanies.findIndex((row) => row[0] === companyId);
-  if (companyIndex < 0) throw new Error("Cadastro criado parcialmente: empresa pendente de reconciliação. Não tente cadastrar novamente; confira a aba Empresas.");
-  await request(`/values/Empresas!J${companyIndex + 2}:K${companyIndex + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [[now, actor.email]] }) });
-  await request(`/values/Empresas!G${companyIndex + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [["ATIVA"]] }) });
-  try { await audit(actor, "create_company_and_admin", { companyId, userId, razaoSocial: input.razaoSocial }, companyId); }
-  catch (error) { console.error("Empresa criada, mas o registro de auditoria falhou.", error); }
+
+  await append("Empresas", [
+    companyId, input.razaoSocial.trim(), input.nomeFantasia.trim(), normalizedCnpj,
+    input.emailContato.trim().toLowerCase(), input.telefone.trim(), "ATIVA",
+    config().spreadsheetId, now, now, actor.email,
+  ]);
+  await append("Usuarios", [
+    userId, input.nomeAdmin.trim(), normalizedEmail, credentials.passwordHash, credentials.passwordSalt,
+    "company_admin", companyId, "SIM", "{}", now, "",
+  ]);
+  try {
+    await audit(actor, "create_company_and_admin", { companyId, userId, razaoSocial: input.razaoSocial }, companyId);
+  } catch (error) {
+    console.error("Empresa criada, mas a auditoria falhou.", error);
+  }
   return { ok: true, companyId, userId };
 }
+
 export async function setCompanyStatus(companyId: string, status: "ATIVA" | "BLOQUEADA") {
   const actor = await requireGeneralAdmin();
   const rows = await companies();
-  const index = rows.findIndex((r) => r[0] === companyId);
+  const index = rows.findIndex((row) => row[0] === companyId);
   if (index < 0) throw new Error("Empresa não encontrada.");
-  await request(`/values/Empresas!G${index + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [[status]] }) });
+  await writeRange(`Empresas!G${index + 2}`, [[status]]);
+  await writeRange(`Empresas!J${index + 2}`, [[new Date().toISOString()]]);
   await audit(actor, status === "ATIVA" ? "reactivate_company" : "block_company", { companyId, status }, companyId);
   return { ok: true };
 }
+
 export async function listCompanies() {
   await requireGeneralAdmin();
-  return (await companies()).map((r) => ({ id: r[0], razaoSocial: r[1], nomeFantasia: r[2], cnpj: r[3], emailContato: r[4], telefone: r[5], status: r[6], spreadsheetLinked: Boolean(r[7]) }));
+  return (await companies()).map((row) => ({
+    id: row[0] ?? "",
+    razaoSocial: row[1] ?? "",
+    nomeFantasia: row[2] ?? "",
+    cnpj: row[3] ?? "",
+    emailContato: row[4] ?? "",
+    telefone: row[5] ?? "",
+    status: row[6] ?? "ATIVA",
+  }));
 }
