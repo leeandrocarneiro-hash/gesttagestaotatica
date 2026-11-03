@@ -165,6 +165,22 @@ export async function saveCurrentCompanySheet(link: string) {
   });
   if (!headerResponse.ok) throw new Error("Não foi possível verificar os cabeçalhos das abas.");
   const headerData = await headerResponse.json();
+
+  // A primeira conexão deve receber uma planilha operacional vazia.
+  // Nunca vincule um arquivo que já contenha lançamentos, para evitar misturar dados.
+  const dataRanges = TAB_NAMES.map((tab) => "ranges=" + encodeURIComponent(tab + "!A2:Z")).join("&");
+  const dataResponse = await fetch(GATEWAY + "/spreadsheets/" + spreadsheetId + "/values:batchGet?" + dataRanges, {
+    headers: { Authorization: "Bearer " + config().apiKey, "X-Connection-Api-Key": config().connectionKey },
+  });
+  if (!dataResponse.ok) throw new Error("Não foi possível verificar se a planilha está vazia.");
+  const dataCheck = await dataResponse.json();
+  const hasExistingData = (dataCheck.valueRanges ?? []).some((range: { values?: unknown[][] }) =>
+    (range.values ?? []).some((row) => row.some((value) => String(value ?? "").trim() !== "")),
+  );
+  if (hasExistingData) {
+    throw new Error("A planilha escolhida já contém informações. Crie uma planilha Google nova e vazia para conectar ao GESTTA.");
+  }
+
   const headerUpdates = TAB_NAMES.flatMap((tab, index) => {
     const current = (headerData.valueRanges?.[index]?.values?.[0] ?? []) as unknown[];
     const expected = companySheetHeaders(tab);
