@@ -44,21 +44,23 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/mcp' | '/.well-known/oauth-protected-resource'
+  fullPaths: '/' | '/login' | '/mcp' | '/.well-known/oauth-protected-resource'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/mcp' | '/.well-known/oauth-protected-resource'
-  id: '__root__' | '/' | '/mcp' | '/.well-known/oauth-protected-resource'
+  to: '/' | '/login' | '/mcp' | '/.well-known/oauth-protected-resource'
+  id: '__root__' | '/' | '/login' | '/mcp' | '/.well-known/oauth-protected-resource'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
