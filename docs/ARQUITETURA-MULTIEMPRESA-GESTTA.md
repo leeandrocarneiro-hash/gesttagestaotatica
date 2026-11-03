@@ -74,3 +74,17 @@ O acesso administrativo financeiro completo é uma decisão de produto, mas deve
 
 ## Limites de publicação
 Este documento e as mudanças desta branch não alteram o deploy nem a branch principal. Não cadastrar empresas reais nem migrar dados até concluir os critérios de aceite.
+
+
+## Auditoria detalhada da branch main (02/11/2026)
+- A rota principal `/` usa `getSession()` e lê a planilha via `getSheetData()`; a rota de login ainda chama `doLogin()` no fluxo existente.
+- `auth.server.ts` delega ao módulo central, mas o módulo central atualmente autentica comparando a senha fornecida com a coluna `Usuarios.senha` em texto aberto.
+- `central-sheet.functions.ts` também grava a senha inicial do administrador geral diretamente na planilha.
+- O cabeçalho central atual de Usuarios inclui `senha`, não hash/salt.
+- A página `/planilha-empresa` permite ao administrador da empresa informar um link de planilha própria. Isso não atende ao modelo aprovado de provisionamento automático e planilha por empresa sem seleção arbitrária de recurso.
+- A rota de login não oferece cadastro público. As funções administrativas centrais não demonstram, no trecho auditado, uma proteção consistente de autorização de administrador geral antes de listar ou alterar empresas; isso precisa ser verificado e corrigido em todas as server functions.
+- As operações do módulo operacional usam `requireCompanySheet()`, mas é necessário auditar também importação de NF-e, PDF, XLSX, relatórios, gráficos e demais server functions para garantir que todas usem a sessão e o identificador resolvido no servidor.
+- O README aponta uma URL Lovable e um identificador de projeto diferentes do projeto Lovable informado anteriormente pelo usuário. O destino correto de deploy precisa ser confirmado no painel Lovable antes de publicar.
+
+## Bloqueios para publicação
+Não publicar nem mesclar até que: (a) senhas legadas sejam migradas com procedimento seguro, (b) autenticação e recuperação estejam seguras, (c) cadastro aberto crie empresa e planilha isoladas de forma transacional ou com compensação, (d) autorização de administrador geral esteja presente em todas as funções administrativas, (e) todos os módulos e rotas sejam auditados, (f) testes de isolamento entre duas empresas passem, (g) build, lint e testes passem, e (h) variáveis secretas e integração Google Sheets/Lovable sejam verificadas no ambiente de deploy.
