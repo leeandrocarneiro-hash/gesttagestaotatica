@@ -403,7 +403,7 @@ function TabView({ tab, data, accessToken }: { tab: TabName; data: SheetData; ac
   return (
     <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       <Panel title={`Novo lançamento — ${cfg.title}`}>
-        {tab === "Materiais" && <div className="mb-4"><InvoiceImportButton /></div>}
+        {tab === "Materiais" && <div className="mb-4"><InvoiceImportButton accessToken={accessToken} /></div>}
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">{cfg.hint}</p>
         <form onSubmit={submit} className="space-y-3">
           {fields.map((f, i) => {
