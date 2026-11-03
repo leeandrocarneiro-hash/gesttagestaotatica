@@ -6,6 +6,12 @@ const DEFAULT_SPREADSHEET_ID = "1inU8c_VuiHPTUePSvbEGGrQpDVlG3pYwG6j4gMJcsPk";
 const COOKIE = "gestta_central_session";
 const encoder = new TextEncoder();
 
+type SheetsResponse = {
+  values?: unknown[][];
+  valueRanges?: Array<{ values?: unknown[][] }>;
+  sheets?: Array<{ properties?: { title?: string; sheetId?: number } }>;
+};
+
 export type Role = "general_admin" | "company_admin" | "employee";
 export type CentralUser = {
   id: string;
@@ -67,7 +73,7 @@ function headers() {
   };
 }
 
-async function request(path: string, init?: RequestInit): Promise<any> {
+async function request(path: string, init?: RequestInit): Promise<SheetsResponse> {
   const c = config();
   const response = await fetch(`${GATEWAY}/spreadsheets/${c.spreadsheetId}${path}`, {
     ...init,
@@ -79,7 +85,7 @@ async function request(path: string, init?: RequestInit): Promise<any> {
     throw new Error("Não foi possível acessar a planilha compartilhada do GESTTA.");
   }
   if (response.status === 204) return {};
-  return response.json();
+  return (await response.json()) as SheetsResponse;
 }
 
 async function readRange(range: string): Promise<string[][]> {
@@ -114,7 +120,7 @@ function columnName(index: number): string {
 
 async function sheetMetadata(): Promise<{ title: string; sheetId: number }[]> {
   const data = await request("?fields=sheets.properties.sheetId,sheets.properties.title");
-  return (data.sheets ?? []).map((sheet: any) => ({
+  return (data.sheets ?? []).map((sheet) => ({
     title: String(sheet.properties?.title ?? ""),
     sheetId: Number(sheet.properties?.sheetId ?? -1),
   }));
