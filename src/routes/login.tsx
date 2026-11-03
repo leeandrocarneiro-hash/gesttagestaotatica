@@ -2,60 +2,71 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { doLogin } from "@/lib/auth.functions";
+import { doLogin, doRegisterCompany } from "@/lib/auth.functions";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({
-    meta: [
-      { title: "Entrar — Gestão de Serviços" },
-      { name: "description", content: "Acesse a área da sua empresa para lançar serviços, custos e recebimentos." },
-      { property: "og:title", content: "Entrar — Gestão de Serviços" },
-      { property: "og:description", content: "Área de acesso de cada empresa." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Acesso — GESTTA" }, { name: "description", content: "Entre ou cadastre sua empresa no GESTTA." }] }),
   component: LoginPage,
 });
 
 function LoginPage() {
-  const fn = useServerFn(doLogin);
+  const loginFn = useServerFn(doLogin);
+  const registerFn = useServerFn(doRegisterCompany);
   const navigate = useNavigate();
-  const [login, setLogin] = useState("");
-  const [senha, setSenha] = useState("");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [companyName, setCompanyName] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
-      const r = await fn({ data: { login, senha } });
-      navigate({ to: r.needsSheet ? "/planilha-empresa" : "/", replace: true });
+      if (mode === "register") {
+        const result = await registerFn({ data: { companyName, displayName, email, password } });
+        if (result.needsEmailConfirmation) {
+          toast.success("Cadastro iniciado. Confirme seu e-mail e depois entre no sistema.");
+          setMode("login");
+        } else {
+          toast.success("Empresa cadastrada!");
+          navigate({ to: "/planilha-empresa", replace: true });
+        }
+      } else {
+        const result = await loginFn({ data: { login: email, senha: password } });
+        navigate({ to: result.needsSheet ? "/planilha-empresa" : "/", replace: true });
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Não foi possível entrar");
+      toast.error(err instanceof Error ? err.message : "Não foi possível concluir o acesso.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-xl border bg-card p-6 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-bold">Gestão de Serviços</h1>
-          <p className="text-sm text-muted-foreground">Entre com o usuário e a senha cadastrados pela equipe GESTTA. No primeiro acesso, você será orientado a conectar sua planilha Google.</p>
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <section className="w-full max-w-md space-y-5 rounded-xl border bg-card p-6 shadow-sm">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight">GESTTA</h1>
+          <p className="text-sm text-muted-foreground">Gestão inteligente para sua empresa.</p>
+        </header>
+        <div className="grid grid-cols-2 rounded-lg bg-muted p-1">
+          <button type="button" onClick={() => setMode("login")} className={`rounded-md px-3 py-2 text-sm font-medium ${mode === "login" ? "bg-background shadow" : "text-muted-foreground"}`}>Entrar</button>
+          <button type="button" onClick={() => setMode("register")} className={`rounded-md px-3 py-2 text-sm font-medium ${mode === "register" ? "bg-background shadow" : "text-muted-foreground"}`}>Criar conta</button>
         </div>
-        <label className="block space-y-1 text-sm">
-          <span>Usuário (e-mail cadastrado)</span>
-          <input className="field w-full" type="text" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" placeholder="Digite o usuário recebido do GESTTA" required />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span>Senha</span>
-          <input className="field w-full" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required />
-        </label>
-        <Button type="submit" className="w-full" disabled={busy}>{busy ? "Entrando..." : "Entrar"}</Button>
-      </form>
-    </div>
+        <form onSubmit={submit} className="space-y-4">
+          {mode === "register" && <>
+            <label className="block space-y-1 text-sm"><span>Nome da empresa</span><input className="field w-full" value={companyName} onChange={e => setCompanyName(e.target.value)} autoComplete="organization" required minLength={2} /></label>
+            <label className="block space-y-1 text-sm"><span>Seu nome</span><input className="field w-full" value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" required minLength={2} /></label>
+          </>}
+          <label className="block space-y-1 text-sm"><span>E-mail de acesso</span><input className="field w-full" type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" required /></label>
+          <label className="block space-y-1 text-sm"><span>Senha</span><input className="field w-full" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={mode === "register" ? "new-password" : "current-password"} required minLength={mode === "register" ? 12 : 1} /></label>
+          {mode === "register" && <p className="text-xs text-muted-foreground">Use uma senha com pelo menos 12 caracteres. Após criar a conta, você poderá conectar a planilha da empresa.</p>}
+          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta da empresa"}</Button>
+        </form>
+      </section>
+    </main>
   );
 }
