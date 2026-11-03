@@ -5,7 +5,7 @@ const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
 
 const HEADERS = {
   Empresas: ["id", "razao_social", "nome_fantasia", "cnpj", "email_contato", "telefone", "status", "spreadsheet_id", "criado_em", "aprovado_em", "aprovado_por"],
-  Solicitacoes: ["id", "empresa_id", "solicitante_nome", "email", "telefone", "status", "criado_em", "analisado_em", "analisado_por"],
+  Solicitacoes: ["id", "razao_social", "nome_fantasia", "cnpj", "solicitante_nome", "usuario", "senha", "email", "telefone", "status", "criado_em", "analisado_em", "analisado_por_empresa_id"],
   Usuarios: ["id", "nome", "usuario", "senha", "papel", "empresa_id", "ativo", "permissoes_json", "criado_em", "ultimo_acesso"],
   Auditoria: ["id", "usuario_id", "empresa_id", "acao", "detalhes_json", "criado_em"],
 } as const;
