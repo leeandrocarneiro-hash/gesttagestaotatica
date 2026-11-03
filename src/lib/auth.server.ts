@@ -1,30 +1,72 @@
-import { centralLogin, centralLogout, currentCentralUser, currentCompanyLabel, requireCurrentCompanySheet } from "./central-auth.server";
+import {
+  centralLogin,
+  centralLogout,
+  currentCentralUser,
+  currentCompanyLabel,
+  hasInitialSetup,
+  registerInitialAdministrator,
+  createCompanyAndAdmin,
+  listCompanies,
+  setCompanyStatus,
+} from "./central-auth.server";
 
-export type Session = { empresa: string; login: string; papel: "company_admin" | "employee"; spreadsheetId: string | null };
+export type Session = {
+  id: string;
+  empresa: string;
+  login: string;
+  papel: "general_admin" | "company_admin" | "employee";
+};
 
 export async function login(loginName: string, senha: string) {
-  const result = await centralLogin(loginName, senha, undefined, true);
-  if (result.role === "general_admin") throw new Error("Use o acesso do administrador geral.");
-  return { ok: true, needsSheet: result.needsSheet };
+  return centralLogin(loginName, senha);
 }
 
 export async function logout() {
   await centralLogout();
+  return { ok: true };
 }
 
 export async function currentSession(): Promise<Session | null> {
   const user = await currentCentralUser();
-  if (!user || user.papel === "general_admin") return null;
-  let spreadsheetId: string | null = null;
-  try {
-    spreadsheetId = await requireCurrentCompanySheet();
-  } catch {
-    // A conta pode entrar antes de vincular sua planilha.
-  }
-  return { empresa: await currentCompanyLabel(), login: user.email, papel: user.papel as "company_admin" | "employee", spreadsheetId };
+  if (!user) return null;
+  return {
+    id: user.id,
+    empresa: await currentCompanyLabel(),
+    login: user.email,
+    papel: user.papel,
+  };
 }
 
-export async function requireCompanySheet(): Promise<string> {
-  return requireCurrentCompanySheet();
+export async function setupStatus() {
+  return { required: await hasInitialSetup() };
 }
 
+export async function setupInitialAdministrator(input: {
+  companyName: string;
+  displayName: string;
+  email: string;
+  password: string;
+}) {
+  return registerInitialAdministrator(input);
+}
+
+export async function adminListCompanies() {
+  return listCompanies();
+}
+
+export async function adminCreateCompany(input: {
+  razaoSocial: string;
+  nomeFantasia: string;
+  cnpj: string;
+  emailContato: string;
+  telefone: string;
+  nomeAdmin: string;
+  emailAdmin: string;
+  senhaAdmin: string;
+}) {
+  return createCompanyAndAdmin(input);
+}
+
+export async function adminSetCompanyStatus(input: { companyId: string; status: "ATIVA" | "BLOQUEADA" }) {
+  return setCompanyStatus(input.companyId, input.status);
+}

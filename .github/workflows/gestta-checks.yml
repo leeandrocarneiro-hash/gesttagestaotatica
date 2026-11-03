@@ -1,0 +1,39 @@
+name: GESTTA checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, "feature/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Lint changed GESTTA integration
+        run: >-
+          bunx eslint
+          src/lib/central-auth.server.ts
+          src/lib/sheets.server.ts
+          src/lib/auth.server.ts
+          src/lib/auth.functions.ts
+          src/lib/sheets.functions.ts
+          src/routes/index.tsx
+          src/routes/login.tsx
+          src/components/CompanyAdminPanel.tsx
+          --rule 'prettier/prettier: off'
+      - name: Build application
+        run: bun run build
+      - name: Run tests
+        run: bun run test

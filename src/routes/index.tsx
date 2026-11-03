@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { getSession, doLogout } from "@/lib/auth.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
+import { CompanyAdminPanel } from "@/components/CompanyAdminPanel";
 import { InvoiceImportButton } from "@/components/InvoiceImportButton";
 import { STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
@@ -85,7 +86,7 @@ function Index() {
   const { data } = useSuspenseQuery(dataQuery(session.id));
   const qc = useQueryClient();
   const s = useSummary(data);
-  const [tab, setTab] = useState<TabName | "Resumo">("Resumo");
+  const [tab, setTab] = useState<TabName | "Resumo" | "Administração">("Resumo");
   const [refreshing, setRefreshing] = useState(false);
 
   // Atualiza os dados quando o usuário retorna à aba do GESTTA.
@@ -156,20 +157,20 @@ function Index() {
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4">
-          {(["Resumo", ...TAB_NAMES] as const).map((t) => (
+          {(["Resumo", ...TAB_NAMES, ...(session.papel === "general_admin" ? ["Administração" as const] : [])] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`whitespace-nowrap rounded-t-md px-4 py-2 text-sm font-medium transition ${tab === t ? "bg-background text-foreground" : "opacity-75 hover:opacity-100"}`}
             >
-              {t === "Resumo" ? "Resumo" : TABS[t].title}
+              {t === "Resumo" ? "Resumo" : t === "Administração" ? "Administração" : TABS[t].title}
             </button>
           ))}
         </nav>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {tab === "Resumo" ? (
+        {tab === "Administração" ? <CompanyAdminPanel /> : tab === "Resumo" ? (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <Kpi label="Faturado (serviços)" value={brl(s.faturado)} />
