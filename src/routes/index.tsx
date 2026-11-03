@@ -3,8 +3,6 @@ import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@ta
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { useWebMCP } from "use-webmcp-tool";
-import { runWebMCPTool } from "@/lib/webmcp-telemetry";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -91,30 +89,6 @@ function Index() {
       window.removeEventListener("pageshow", refreshOnReturn);
     };
   }, [qc]);
-
-  useWebMCP({
-    name: "get_dashboard_summary",
-    description: "Read the dashboard totals (billed, received, spending, balance) and profit per service shown on screen.",
-    annotations: { readOnlyHint: true, untrustedContentHint: true },
-    execute: () => runWebMCPTool("get_dashboard_summary", () =>
-      [`Faturado ${brl(s.faturado)} · Recebido ${brl(s.recebido)} · Gastos ${brl(s.gastos)} · Saldo ${brl(s.saldo)}`,
-        ...s.services.map((x) => `${x.id} ${x.cliente} (${x.status}): preço ${brl(x.preco)}, custo ${brl(x.custo)}, lucro ${brl(x.lucro)}`)].join("\n")),
-  });
-
-  useWebMCP({
-    name: "open_tab",
-    description: "Switch the visible section of the page: Resumo, Servicos, Atendimentos, Materiais, Recebimentos or Despesas.",
-    inputSchema: {
-      type: "object",
-      properties: { tab: { type: "string", enum: ["Resumo", ...TAB_NAMES], description: "Section to show." } },
-      required: ["tab"],
-    },
-    execute: ({ tab: next }: { tab: string }) => runWebMCPTool("open_tab", () => {
-      if (next !== "Resumo" && !(TAB_NAMES as string[]).includes(next)) throw new Error("Unknown tab.");
-      setTab(next as TabName | "Resumo");
-      return `Showing ${next}.`;
-    }),
-  });
 
   const agendados = s.services.filter((x) => x.status === "Agendado" || x.status === "Em execução");
 
