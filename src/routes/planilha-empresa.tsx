@@ -52,7 +52,13 @@ function SheetPage() {
         <div>
           <h1 className="text-2xl font-bold">Olá, {session.empresa}</h1>
           <p className="text-sm text-muted-foreground">
-            Cole o link da planilha Google onde os lançamentos da sua empresa serão salvos. As abas necessárias serão criadas automaticamente.
+            No primeiro acesso, conecte uma planilha Google nova e vazia. O GESTTA criará automaticamente as abas e os cabeçalhos necessários para seus lançamentos.
+
+            <span className="mt-3 block font-medium text-foreground">Antes de continuar:</span>
+            <span className="block">1. Crie uma planilha em branco no Google Sheets.</span>
+            <span className="block">2. Compartilhe com a conta Google autorizada pelo GESTTA, com permissão de Editor.</span>
+            <span className="block">3. Cole aqui o link completo da planilha.</span>
+            <span className="mt-2 block">Por segurança, o sistema recusará arquivos que já tenham lançamentos nas abas operacionais.</span>
           </p>
         </div>
         <input className="field w-full" placeholder="https://docs.google.com/spreadsheets/d/..." value={link} onChange={(e) => setLink(e.target.value)} required />
