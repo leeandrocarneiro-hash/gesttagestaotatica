@@ -76,7 +76,7 @@ export async function createCompanySpreadsheet(companyName: string, email: strin
       '=ARRAYFORMULA(IF(A2:A="","",C2:C-F2:F))',
       '=ARRAYFORMULA(IF(A2:A="","",IFERROR(G2:G/C2:C,0)))',
       '=ARRAYFORMULA(IF(A2:A="","",SUMIF(Recebimentos!B2:B,A2:A,Recebimentos!D2:D)))',
-      "", STATUS[0], `=COUNTIF(Servicos!F2:F,K2)`,
+      "", "Agendado", `=COUNTIF(Servicos!F2:F,K2)`,
     ],
   ];
   const side = [
