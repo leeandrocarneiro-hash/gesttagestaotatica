@@ -17,6 +17,11 @@ import { STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } fro
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
 
 export const Route = createFileRoute("/")({
+  beforeLoad: async () => {
+    const session = await getSession();
+    if (!session || !session.spreadsheetId) throw redirect({ to: "/login" });
+    return { session };
+  },
   head: () => ({
     meta: [
       { title: "Gestão de Serviços — Agenda, custos e lucro" },
@@ -71,6 +76,7 @@ function useSummary(d: SheetData) {
 const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--muted-foreground)"];
 
 function Index() {
+  const { session } = Route.useRouteContext();
   const { data } = useSuspenseQuery(dataQuery);
   const qc = useQueryClient();
   const s = useSummary(data);
