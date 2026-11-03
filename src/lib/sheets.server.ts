@@ -3,6 +3,11 @@ import { currentCentralUser, requireCurrentCompanySheet } from "./central-auth.s
 
 export const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
 
+type SheetsResponse = {
+  values?: unknown[][];
+  sheets?: Array<{ properties?: { title?: string; sheetId?: number } }>;
+};
+
 const SCHEMAS: Record<TabName, { visible: number; idColumn: number; companyColumn: number; endColumn: string }> = {
   Servicos: { visible: 8, idColumn: 8, companyColumn: 9, endColumn: "J" },
   Atendimentos: { visible: 6, idColumn: 6, companyColumn: 7, endColumn: "H" },
@@ -22,7 +27,7 @@ function authHeaders() {
   };
 }
 
-async function call(spreadsheetId: string, path: string, init?: RequestInit): Promise<any> {
+async function call(spreadsheetId: string, path: string, init?: RequestInit): Promise<SheetsResponse> {
   const response = await fetch(`${GATEWAY}/spreadsheets/${spreadsheetId}${path}`, {
     ...init,
     headers: { ...authHeaders(), ...(init?.headers ?? {}) },
@@ -33,7 +38,7 @@ async function call(spreadsheetId: string, path: string, init?: RequestInit): Pr
     throw new Error("Não foi possível concluir a operação na planilha compartilhada.");
   }
   if (response.status === 204) return {};
-  return response.json();
+  return (await response.json()) as SheetsResponse;
 }
 
 function columnName(index: number): string {
@@ -96,7 +101,6 @@ function normalizeValues(tab: TabName, values: string[], serviceCode?: string): 
 }
 
 export async function appendRow(tab: TabName, values: string[]) {
-  const user = await currentCentralUser();
   const { spreadsheetId, companyId } = await requireCurrentCompanySheet();
   let serviceCode: string | undefined;
   if (tab === "Servicos") {
@@ -117,7 +121,6 @@ export async function appendRow(tab: TabName, values: string[]) {
     `/values/${tab}!A1:${schema.endColumn}1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     { method: "POST", body: JSON.stringify({ values: [row] }) },
   );
-  void user;
   return { ok: true, id: serviceCode };
 }
 
@@ -137,7 +140,7 @@ export async function updateRow(tab: TabName, rowNumber: number, values: string[
   const { spreadsheetId, sheetRow, schema } = await findOwnedRow(tab, rowNumber);
   const base = normalizeValues(tab, values, undefined);
   const firstColumn = tab === "Servicos" ? "B" : "A";
-  const lastVisibleIndex = schema.visible - (tab === "Servicos" ? 1 : 1);
+  const lastVisibleIndex = schema.visible - 1;
   const lastColumn = columnName(lastVisibleIndex);
   await call(spreadsheetId, `/values/${tab}!${firstColumn}${sheetRow}:${lastColumn}${sheetRow}?valueInputOption=USER_ENTERED`, {
     method: "PUT",
@@ -149,14 +152,15 @@ export async function updateRow(tab: TabName, rowNumber: number, values: string[
 export async function removeRow(tab: TabName, rowNumber: number) {
   const { spreadsheetId, sheetRow } = await findOwnedRow(tab, rowNumber);
   const metadata = await call(spreadsheetId, "?fields=sheets.properties.sheetId,sheets.properties.title");
-  const target = (metadata.sheets ?? []).find((sheet: any) => sheet.properties?.title === tab);
-  if (!target) throw new Error("Aba não encontrada na planilha.");
+  const target = (metadata.sheets ?? []).find((sheet) => sheet.properties?.title === tab);
+  const sheetId = target?.properties?.sheetId;
+  if (typeof sheetId !== "number") throw new Error("Aba não encontrada na planilha.");
   await call(spreadsheetId, ":batchUpdate", {
     method: "POST",
     body: JSON.stringify({
       requests: [{
         deleteDimension: {
-          range: { sheetId: target.properties.sheetId, dimension: "ROWS", startIndex: sheetRow - 1, endIndex: sheetRow },
+          range: { sheetId, dimension: "ROWS", startIndex: sheetRow - 1, endIndex: sheetRow },
         },
       }],
     }),
