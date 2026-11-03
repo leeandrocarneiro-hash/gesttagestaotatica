@@ -133,6 +133,7 @@ export async function saveCompanySheet(link: string) {
   if (!token || !user || !activeToken) throw new Error("Faça login novamente.");
   const { profile, company } = await companyForUser(user.id, activeToken);
   if (profile.role !== "company_admin") throw new Error("Somente o administrador da empresa pode vincular a planilha.");
+  if (company.spreadsheet_id) throw new Error("Esta empresa já possui uma planilha vinculada. Para trocar, solicite suporte ao administrador GESTTA.");
   const match = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/) || link.trim().match(/^([a-zA-Z0-9_-]{30,})$/);
   const spreadsheetId = match?.[1];
   if (!spreadsheetId) throw new Error("Link inválido. Cole o endereço completo de uma planilha Google.");
