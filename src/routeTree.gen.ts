@@ -10,70 +10,33 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ConfigurarPlanilhaCentralRouteImport } from './routes/configurar-planilha-central'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as PlanilhaEmpresaRouteImport } from './routes/planilha-empresa'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConfigurarPlanilhaCentralRoute =
-  ConfigurarPlanilhaCentralRouteImport.update({
-    id: '/configurar-planilha-central',
-    path: '/configurar-planilha-central',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PlanilhaEmpresaRoute = PlanilhaEmpresaRouteImport.update({
-  id: '/planilha-empresa',
-  path: '/planilha-empresa',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/configurar-planilha-central': typeof ConfigurarPlanilhaCentralRoute
-  '/login': typeof LoginRoute
-  '/planilha-empresa': typeof PlanilhaEmpresaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/configurar-planilha-central': typeof ConfigurarPlanilhaCentralRoute
-  '/login': typeof LoginRoute
-  '/planilha-empresa': typeof PlanilhaEmpresaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/configurar-planilha-central': typeof ConfigurarPlanilhaCentralRoute
-  '/login': typeof LoginRoute
-  '/planilha-empresa': typeof PlanilhaEmpresaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    '/' | '/configurar-planilha-central' | '/login' | '/planilha-empresa'
+  fullPaths: '/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/configurar-planilha-central' | '/login' | '/planilha-empresa'
-  id:
-    | '__root__'
-    | '/'
-    | '/configurar-planilha-central'
-    | '/login'
-    | '/planilha-empresa'
+  to: '/'
+  id: '__root__' | '/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ConfigurarPlanilhaCentralRoute: typeof ConfigurarPlanilhaCentralRoute
-  LoginRoute: typeof LoginRoute
-  PlanilhaEmpresaRoute: typeof PlanilhaEmpresaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -85,35 +48,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/configurar-planilha-central': {
-      id: '/configurar-planilha-central'
-      path: '/configurar-planilha-central'
-      fullPath: '/configurar-planilha-central'
-      preLoaderRoute: typeof ConfigurarPlanilhaCentralRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/planilha-empresa': {
-      id: '/planilha-empresa'
-      path: '/planilha-empresa'
-      fullPath: '/planilha-empresa'
-      preLoaderRoute: typeof PlanilhaEmpresaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ConfigurarPlanilhaCentralRoute: ConfigurarPlanilhaCentralRoute,
-  LoginRoute: LoginRoute,
-  PlanilhaEmpresaRoute: PlanilhaEmpresaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
