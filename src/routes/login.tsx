@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { doLogin, registerCompany, requestPasswordReset, updateRecoveredPassword } from "@/lib/auth.functions";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,11 @@ function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [recovery, setRecovery] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("recovery") === "1" || window.location.hash.includes("type=recovery")) setRecovery(true);
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
