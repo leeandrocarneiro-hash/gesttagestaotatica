@@ -15,6 +15,7 @@ export async function getSession() {
     throw new Error("O acesso desta empresa está desativado. Entre em contato com o administrador do GESTTA.");
   }
   return {
+    id: user.id,
     empresa: company.company_name ?? user.user_metadata?.company_name ?? "Minha empresa",
     login: user.email ?? "",
     papel: "company_admin" as const,

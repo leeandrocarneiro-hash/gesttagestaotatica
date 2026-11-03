@@ -13,7 +13,7 @@ import { ReportPdfButton } from "@/components/ReportPdfButton";
 import { InvoiceImportButton } from "@/components/InvoiceImportButton";
 import { STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
-const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
+const dataQuery = (companyId: string) => queryOptions({ queryKey: ["sheet", companyId], queryFn: () => getSheetData(), staleTime: 30_000 });
 
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
@@ -31,7 +31,11 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(dataQuery),
+  loader: async ({ context }) => {
+    const session = await getSession();
+    if (!session) throw redirect({ to: "/login" });
+    return context.queryClient.ensureQueryData(dataQuery(session.id));
+  },
   component: Index,
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-lg p-8 text-center">
@@ -78,7 +82,7 @@ function Index() {
   const { session } = Route.useRouteContext();
   const navigate = useNavigate();
   
-  const { data } = useSuspenseQuery(dataQuery);
+  const { data } = useSuspenseQuery(dataQuery(session.id));
   const qc = useQueryClient();
   const s = useSummary(data);
   const [tab, setTab] = useState<TabName | "Resumo">("Resumo");
@@ -148,7 +152,7 @@ function Index() {
               <RefreshCw className={refreshing ? "animate-spin" : ""} /> Atualizar
             </Button>
             <ReportPdfButton data={data} />
-            <Button variant="secondary" size="sm" onClick={async () => { await doLogout(); await navigate({ to: "/login", replace: true }); }}><LogOut /> Sair</Button>
+            <Button variant="secondary" size="sm" onClick={async () => { await doLogout(); qc.removeQueries({ queryKey: ["sheet"] }); await navigate({ to: "/login", replace: true }); }}><LogOut /> Sair</Button>
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4">
