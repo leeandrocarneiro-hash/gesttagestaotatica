@@ -71,7 +71,7 @@ async function request(path: string, init?: RequestInit): Promise<any> {
   const c = config();
   const response = await fetch(`${GATEWAY}/spreadsheets/${c.spreadsheetId}${path}`, {
     ...init,
-    headers: { ...headers(), ...(init?.headers ?? {}) },
+    headers: headers(),
   });
   if (!response.ok) {
     const detail = await response.text();
@@ -288,6 +288,7 @@ export async function registerInitialAdministrator(input: {
   email: string;
   password: string;
 }) {
+  await sessionSecretKey();
   await ensureSharedSchema();
   if ((await users()).length > 0) throw new Error("A configuração inicial já foi concluída. Solicite a criação de acessos ao administrador geral.");
   const companyId = crypto.randomUUID();
