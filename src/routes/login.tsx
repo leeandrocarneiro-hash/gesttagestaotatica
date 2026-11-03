@@ -1,60 +1,61 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { doLogin, registerCompany, requestPasswordReset, updateRecoveredPassword } from "@/lib/auth.functions";
+import { doLogin, getSetupStatus, registerCompany } from "@/lib/auth.functions";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Acesso — GESTTA" }, { name: "description", content: "Entre ou cadastre sua empresa no GESTTA." }] }),
+  head: () => ({ meta: [{ title: "Acesso — GESTTA" }, { name: "description", content: "Acesse a gestão financeira da sua empresa no GESTTA." }] }),
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [setupRequired, setSetupRequired] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
+  const [mode, setMode] = useState<"login" | "setup">("login");
   const [companyName, setCompanyName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [recovery, setRecovery] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("recovery") === "1" || window.location.hash.includes("type=recovery")) setRecovery(true);
+    let active = true;
+    getSetupStatus()
+      .then((result) => {
+        if (!active) return;
+        setSetupRequired(result.required);
+        if (result.required) setMode("setup");
+      })
+      .catch((error) => {
+        if (active) toast.error(error instanceof Error ? error.message : "Não foi possível verificar a configuração.");
+      })
+      .finally(() => { if (active) setCheckingSetup(false); });
+    return () => { active = false; };
   }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     try {
-      if (mode === "register") {
-        const result = await registerCompany({ data: { companyName, displayName, email, password } });
-        if (result.confirmationRequired) {
-          toast.success("Cadastro recebido! Confirme seu e-mail para acessar o GESTTA.");
-          setMode("login");
-          return;
-        }
-        toast.success("Empresa cadastrada com sucesso!");
+      if (mode === "setup") {
+        await registerCompany({ data: { companyName, displayName, email, password } });
+        toast.success("Administrador geral criado. Seus registros existentes foram associados à primeira empresa.");
+        setSetupRequired(false);
       } else {
-        if (recovery) {
-          await updateRecoveredPassword(newPassword);
-          toast.success("Senha atualizada. Entre com sua nova senha.");
-          setRecovery(false);
-          setPassword("");
-          setNewPassword("");
-          return;
-        }
         await doLogin({ data: { login: email, senha: password } });
+        toast.success("Acesso realizado com sucesso.");
       }
-      navigate({ to: "/", replace: true });
+      await navigate({ to: "/", replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível concluir o acesso.");
     } finally {
       setBusy(false);
     }
   }
+
+  const settingUp = mode === "setup";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
@@ -63,23 +64,44 @@ function LoginPage() {
           <h1 className="text-3xl font-bold tracking-tight">GESTTA</h1>
           <p className="text-sm text-muted-foreground">Gestão inteligente para sua empresa.</p>
         </header>
-        <div className="grid grid-cols-2 rounded-lg bg-muted p-1">
-          <button type="button" onClick={() => setMode("login")} className={`rounded-md px-3 py-2 text-sm font-medium ${mode === "login" ? "bg-background shadow" : "text-muted-foreground"}`}>Entrar</button>
-          <button type="button" onClick={() => setMode("register")} className={`rounded-md px-3 py-2 text-sm font-medium ${mode === "register" ? "bg-background shadow" : "text-muted-foreground"}`}>Criar conta</button>
-        </div>
-        <form onSubmit={submit} className="space-y-4">
-          {mode === "register" && <>
-            <label className="block space-y-1 text-sm"><span>Nome da empresa</span><input className="field w-full" value={companyName} onChange={e => setCompanyName(e.target.value)} autoComplete="organization" required minLength={2} maxLength={120} /></label>
-            <label className="block space-y-1 text-sm"><span>Nome do responsável</span><input className="field w-full" value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" required minLength={2} maxLength={120} /></label>
-          </>}
-          <label className="block space-y-1 text-sm"><span>E-mail</span><input className="field w-full" type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" required maxLength={200} /></label>
-          <label className="block space-y-1 text-sm"><span>Senha</span><input className="field w-full" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={mode === "register" ? "new-password" : "current-password"} required minLength={mode === "register" ? 12 : 1} maxLength={200} /></label>
-          {mode === "register" && <p className="text-xs text-muted-foreground">Use pelo menos 12 caracteres. Os dados da sua empresa ficarão separados dos demais clientes.</p>}
-          {recovery && <label className="block space-y-1 text-sm"><span>Nova senha</span><input className="field w-full" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={12} required autoComplete="new-password" /></label>}
-          {mode === "login" && !recovery && <button type="button" className="text-sm text-primary underline" onClick={async () => { try { await requestPasswordReset(email); toast.success("Se o e-mail estiver cadastrado, você receberá o link de recuperação."); } catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível solicitar a recuperação."); } }}>Esqueci minha senha</button>}
-          {recovery && <button type="button" className="text-sm text-primary underline" onClick={() => setRecovery(false)}>Voltar ao login</button>}
-          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Aguarde..." : recovery ? "Salvar nova senha" : mode === "login" ? "Entrar" : "Criar conta da empresa"}</Button>
-        </form>
+        {checkingSetup ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Verificando a configuração...</p>
+        ) : (
+          <>
+            {setupRequired && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+                <p className="font-medium">Configuração inicial</p>
+                <p className="mt-1 text-muted-foreground">Crie o administrador geral e cadastre a primeira empresa. Os lançamentos já existentes na planilha serão vinculados a ela.</p>
+              </div>
+            )}
+            <form onSubmit={submit} className="space-y-4">
+              {settingUp && (
+                <>
+                  <label className="block space-y-1 text-sm">
+                    <span>Nome da primeira empresa</span>
+                    <input className="field w-full" value={companyName} onChange={(e) => setCompanyName(e.target.value)} autoComplete="organization" required minLength={2} maxLength={120} />
+                  </label>
+                  <label className="block space-y-1 text-sm">
+                    <span>Nome do administrador geral</span>
+                    <input className="field w-full" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" required minLength={2} maxLength={120} />
+                  </label>
+                </>
+              )}
+              <label className="block space-y-1 text-sm">
+                <span>E-mail</span>
+                <input className="field w-full" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required maxLength={200} />
+              </label>
+              <label className="block space-y-1 text-sm">
+                <span>Senha</span>
+                <input className="field w-full" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={settingUp ? "new-password" : "current-password"} required minLength={settingUp ? 12 : 1} maxLength={200} />
+              </label>
+              {settingUp && <p className="text-xs text-muted-foreground">Use uma senha com pelo menos 12 caracteres. Ela será armazenada com hash PBKDF2 e salt individual.</p>}
+              <Button type="submit" className="w-full" disabled={busy || checkingSetup}>
+                {busy ? "Aguarde..." : settingUp ? "Criar administrador geral" : "Entrar"}
+              </Button>
+            </form>
+          </>
+        )}
       </section>
     </main>
   );
