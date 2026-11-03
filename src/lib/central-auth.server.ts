@@ -277,6 +277,7 @@ export async function centralLogin(email: string, password: string) {
 }
 
 export async function hasInitialSetup(): Promise<boolean> {
+  await ensureSharedSchema();
   return (await users()).length === 0;
 }
 
