@@ -31,7 +31,11 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  loader: async ({ context }) => {\n    const session = await getSession();\n    if (!session) throw redirect({ to: "/login" });\n    return context.queryClient.ensureQueryData(dataQuery(session.id));\n  },
+  loader: async ({ context }) => {
+    const session = await getSession();
+    if (!session) throw redirect({ to: "/login" });
+    return context.queryClient.ensureQueryData(dataQuery(session.id));
+  },
   component: Index,
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-lg p-8 text-center">
