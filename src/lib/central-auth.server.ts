@@ -224,7 +224,7 @@ export async function submitAccessRequest(input: { razaoSocial: string; nomeFant
   if ((await users()).some((u) => u.email === username)) throw new Error("Esse usuário já está cadastrado.");
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
-  await append("Solicitacoes", "A1:M1", [id, input.razaoSocial.trim(), input.nomeFantasia.trim(), input.cnpj.replace(/\\D/g, ""), input.nome.trim(), username, input.senha, input.email.trim().toLowerCase(), input.telefone.trim(), "PENDENTE", now, "", ""]);
+  await append("Solicitacoes", "A1:M1", [id, input.razaoSocial.trim(), input.nomeFantasia.trim(), input.cnpj.replace(/\D/g, ""), input.nome.trim(), username, input.senha, input.email.trim().toLowerCase(), input.telefone.trim(), "PENDENTE", now, "", ""]);
   return { ok: true, id };
 }
 export async function listAccessRequests() {
@@ -238,7 +238,7 @@ export async function approveAccessRequest(requestId: string) {
   if (!item || item.status.toUpperCase() !== "PENDENTE") throw new Error("Solicitação não encontrada ou já analisada.");
   const allCompanies = await companies();
   const allUsers = await users();
-  if (allCompanies.some((r) => item.cnpj && String(r[3] ?? "").replace(/\\D/g, "") === item.cnpj)) throw new Error("Já existe uma empresa cadastrada com esse CNPJ.");
+  if (allCompanies.some((r) => item.cnpj && String(r[3] ?? "").replace(/\D/g, "") === item.cnpj)) throw new Error("Já existe uma empresa cadastrada com esse CNPJ.");
   if (allUsers.some((u) => u.email === item.usuario)) throw new Error("Esse usuário já foi cadastrado.");
   const now = new Date().toISOString();
   const companyId = crypto.randomUUID(), userId = crypto.randomUUID();
