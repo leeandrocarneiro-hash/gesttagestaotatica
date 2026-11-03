@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
@@ -54,7 +54,7 @@ function LoginPage() {
           <span>Senha</span>
           <input className="field w-full" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required />
         </label>
-        <Button type="submit" className="w-full" disabled={busy}>{busy ? "Entrando..." : "Entrar"}</Button>
+        <Button type="submit" className="w-full" disabled={busy}>{busy ? "Entrando..." : "Entrar"}</Button>\n        <p className="text-center text-sm text-muted-foreground">Ainda não tem acesso? <Link className="font-medium text-primary underline" to="/solicitar-acesso">Solicite acesso para sua empresa</Link>.</p>
       </form>
     </div>
   );
