@@ -180,3 +180,44 @@ export async function setServiceStatus(id: string, status: string) {
   });
   return { ok: true };
 }
+
+
+const numericValue = (value?: string) => {
+  if (!value) return 0;
+  const normalized = String(value)
+    .replace(/[^\\d,.-]/g, "")
+    .replace(/\\.(?=\\d{3}(?:\\D|$))/g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export function serviceProfits(data: SheetData) {
+  return data.Servicos.filter((row) => row[0]).map((row) => {
+    const id = row[0];
+    const preco = numericValue(row[6]);
+    const materiais = data.Materiais
+      .filter((material) => material[1] === id)
+      .reduce((total, material) => total + numericValue(material[6]), 0);
+    const despesas = data.Despesas
+      .filter((expense) => expense[1] === id)
+      .reduce((total, expense) => total + numericValue(expense[4]), 0);
+    const recebido = data.Recebimentos
+      .filter((receipt) => receipt[1] === id)
+      .reduce((total, receipt) => total + numericValue(receipt[3]), 0);
+    const custo = materiais + despesas;
+    return {
+      id,
+      data: row[1] ?? "",
+      cliente: row[2] ?? "",
+      descricao: row[4] ?? "",
+      status: row[5] ?? "",
+      preco,
+      materiais,
+      despesas,
+      custo,
+      lucro: preco - custo,
+      recebido,
+    };
+  });
+}
