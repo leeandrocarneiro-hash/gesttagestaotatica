@@ -83,7 +83,7 @@ async function request(path: string, init?: RequestInit): Promise<any> {
 }
 
 async function readRange(range: string): Promise<string[][]> {
-  const result = await request(`/values/${encodeURIComponent(range)}`);
+  const result = await request(`/values/${range}`);
   return ((result.values ?? []) as unknown[][]).map((row) => row.map((value) => String(value ?? "")));
 }
 
@@ -95,7 +95,7 @@ async function writeRange(range: string, values: (string | number)[][]) {
 }
 
 async function append(tab: string, values: (string | number)[]) {
-  return request(`/values/${encodeURIComponent(tab + "!A1:Z1")}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
+  return request(`/values/${tab + "!A1:Z1"}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
     method: "POST",
     body: JSON.stringify({ values: [values] }),
   });
