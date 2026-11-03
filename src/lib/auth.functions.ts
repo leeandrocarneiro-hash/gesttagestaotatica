@@ -15,5 +15,5 @@ export const doLogout = createServerFn({ method: "POST" }).handler(async () => {
 });
 
 export const registerCompany = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ companyName: z.string().trim().min(2).max(120), displayName: z.string().trim().min(2).max(120), email: z.string().trim().email().max(200), password: z.string().min(12).max(200) }).parse(d))
-  .handler(async ({ data }) => registerCompanyAccount(data));
+  .inputValidator((d) => z.object({ companyName: z.string().trim().min(2).max(120), email: z.string().trim().email().max(200), password: z.string().min(12).max(200) }).parse(d))
+  .handler(async ({ data }) => registerCompanyAccount({ ...data, displayName: "" }));

@@ -16,7 +16,6 @@ function LoginPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [companyName, setCompanyName] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,7 +25,7 @@ function LoginPage() {
     setBusy(true);
     try {
       if (mode === "register") {
-        await registerFn({ data: { companyName, displayName, email, password } });
+        await registerFn({ data: { companyName, email, password } });
         toast.success("Empresa cadastrada e planilha criada!");
       } else {
         await loginFn({ data: { login: email, senha: password } });
@@ -51,10 +50,7 @@ function LoginPage() {
           <button type="button" onClick={() => setMode("register")} className={`rounded-md px-3 py-2 text-sm font-medium ${mode === "register" ? "bg-background shadow" : "text-muted-foreground"}`}>Criar conta</button>
         </div>
         <form onSubmit={submit} className="space-y-4">
-          {mode === "register" && <>
-            <label className="block space-y-1 text-sm"><span>Nome da empresa</span><input className="field w-full" value={companyName} onChange={e => setCompanyName(e.target.value)} autoComplete="organization" required minLength={2} maxLength={120} /></label>
-            <label className="block space-y-1 text-sm"><span>Nome do responsável</span><input className="field w-full" value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" required minLength={2} maxLength={120} /></label>
-          </>}
+          {mode === "register" && <label className="block space-y-1 text-sm"><span>Nome da empresa</span><input className="field w-full" value={companyName} onChange={e => setCompanyName(e.target.value)} autoComplete="organization" required minLength={2} maxLength={120} /></label>}
           <label className="block space-y-1 text-sm"><span>E-mail</span><input className="field w-full" type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" required maxLength={200} /></label>
           <label className="block space-y-1 text-sm"><span>Senha</span><input className="field w-full" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={mode === "register" ? "new-password" : "current-password"} required minLength={mode === "register" ? 12 : 1} maxLength={200} /></label>
           {mode === "register" && <p className="text-xs text-muted-foreground">Use pelo menos 12 caracteres. Uma planilha exclusiva será criada para sua empresa.</p>}
