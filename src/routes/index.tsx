@@ -148,7 +148,7 @@ function Index() {
               <RefreshCw className={refreshing ? "animate-spin" : ""} /> Atualizar
             </Button>
             <ReportPdfButton data={data} />
-            <Button variant="secondary" size="sm" onClick={async () => { await logoutFn(); await navigate({ to: "/login", replace: true }); }}><LogOut /> Sair</Button>
+            <Button variant="secondary" size="sm" onClick={async () => { await doLogout(); await navigate({ to: "/login", replace: true }); }}><LogOut /> Sair</Button>
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4">
