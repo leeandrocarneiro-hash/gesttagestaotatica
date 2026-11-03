@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSession } from "./auth.server";
+import { endSession, requireSession } from "./auth.server";
 import { TAB_NAMES, type SheetData, type TabName } from "./sheets-config";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
@@ -32,7 +32,19 @@ async function readAll(SPREADSHEET_ID: string): Promise<SheetData> {
   return out;
 }
 
-export const getSheetData = createServerFn({ method: "GET" }).handler(async () => readAll((await requireSession()).sid));
+export const getSheetData = createServerFn({ method: "GET" }).handler(async () => {
+  const s = await requireSession();
+  try {
+    return await readAll(s.sid);
+  } catch (e) {
+    // Company spreadsheet was deleted/unshared: drop the stale login so the user can sign in again.
+    if (e instanceof Error && /\[(404|403)\]/.test(e.message)) {
+      endSession();
+      throw new Error("PLANILHA_NAO_ENCONTRADA");
+    }
+    throw e;
+  }
+});
 
 export const addRow = createServerFn({ method: "POST" })
   .inputValidator((d) =>

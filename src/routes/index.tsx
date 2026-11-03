@@ -2,7 +2,33 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { getMe, logout } from "@/lib/auth.functions";
 import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+
+function SheetError({ error }: { error: unknown }) {
+  const msg = error instanceof Error ? error.message : String(error);
+  const lost = /PLANILHA_NAO_ENCONTRADA|Sessão expirada|\[40[34]\]/.test(msg);
+  const logoutFn = useServerFn(logout);
+  const qc = useQueryClient();
+  const leave = async () => {
+    await logoutFn().catch(() => {});
+    qc.clear();
+    window.location.replace("/login");
+  };
+  useEffect(() => {
+    if (lost) {
+      toast.error("Sua planilha não foi encontrada. Entre novamente.");
+      void leave();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lost]);
+  return (
+    <div className="mx-auto max-w-lg p-8 text-center">
+      <h1 className="text-xl font-semibold">{lost ? "Redirecionando para o login…" : "Não foi possível ler a planilha"}</h1>
+      {!lost && <p className="mt-2 text-sm text-muted-foreground">{msg}</p>}
+      <Button className="mt-4" variant="outline" onClick={leave}>Sair e entrar novamente</Button>
+    </div>
+  );
+}
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Download, ExternalLink, RefreshCw, Plus, Trash2, LogOut } from "lucide-react";
@@ -32,12 +58,7 @@ export const Route = createFileRoute("/")({
   },
   loader: ({ context }) => context.queryClient.ensureQueryData(dataQuery),
   component: Index,
-  errorComponent: ({ error }) => (
-    <div className="mx-auto max-w-lg p-8 text-center">
-      <h1 className="text-xl font-semibold">Não foi possível ler a planilha</h1>
-      <p className="mt-2 text-sm text-muted-foreground">{(error as Error).message}</p>
-    </div>
-  ),
+  errorComponent: ({ error }) => <SheetError error={error} />,
 });
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
