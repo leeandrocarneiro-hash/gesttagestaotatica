@@ -53,7 +53,7 @@ export async function appendRow(tab: TabName, values: string[]) {
     row = [...row.slice(0, 6), Math.round(q * u * 100) / 100];
   }
   await call(
-    `${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values/${tab}!A1:H1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `${GATEWAY}/spreadsheets/${spreadsheetId}/values/${tab}!A1:H1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     { method: "POST", body: JSON.stringify({ values: [row] }) },
   );
   return { ok: true, id };
@@ -64,7 +64,7 @@ export async function setServiceStatus(id: string, status: string) {
   const all = await readAll();
   const idx = all.Servicos.findIndex((r) => r[0] === id);
   if (idx < 0) throw new Error("Serviço não encontrado");
-  await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values/Servicos!F${idx + 2}?valueInputOption=USER_ENTERED`, {
+  await call(`${GATEWAY}/spreadsheets/${spreadsheetId}/values/Servicos!F${idx + 2}?valueInputOption=USER_ENTERED`, {
     method: "PUT",
     body: JSON.stringify({ values: [[status]] }),
   });
