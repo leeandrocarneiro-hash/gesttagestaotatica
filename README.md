@@ -26,10 +26,10 @@ Cada lançamento é filtrado no servidor pelo identificador da empresa autentica
 
 Configure-as no ambiente de hospedagem do GESTTA. Não use prefixo `VITE_`:
 
-- `LOVABLE_API_KEY`: chave do gateway do Lovable.
-- `GOOGLE_SHEETS_API_KEY`: chave de conexão do Google Sheets no gateway.
-- `GESTTA_CENTRAL_SPREADSHEET_ID`: ID da planilha acima (já preenchido no arquivo `.env.example` como referência).
-- `GESTTA_SESSION_SECRET`: segredo aleatório com pelo menos 32 caracteres, usado para assinar as sessões.
+- `LOVABLE_API_KEY`: gerenciada e injetada automaticamente pela Lovable; não crie nem substitua manualmente.
+- `GOOGLE_SHEETS_API_KEY`: gerenciada pela conexão do conector Google Sheets. Conecte a conta Google do projeto em **Settings → Integrations → Google Sheets**.
+- `GESTTA_SESSION_SECRET`: crie em **More → Settings → Secrets** com um valor aleatório forte de pelo menos 32 bytes. Esse segredo assina os cookies de sessão.
+- `GESTTA_CENTRAL_SPREADSHEET_ID`: opcional; o código já usa por padrão a planilha existente informada neste README.
 
 Essas chaves são segredos de servidor e nunca devem ser colocadas no código do navegador, em commits ou no arquivo `.env.example`.
 
