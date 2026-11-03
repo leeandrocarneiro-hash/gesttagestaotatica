@@ -206,7 +206,52 @@ export async function saveCurrentCompanySheet(link: string) {
   return { ok: true };
 }
 
-export async function requireGeneralAdmin() {
+
+type AccessRequest = { id: string; razaoSocial: string; nomeFantasia: string; cnpj: string; nome: string; usuario: string; senha: string; email: string; telefone: string; status: string; criadoEm: string };
+async function accessRequests(): Promise<AccessRequest[]> {
+  const result = await request("/values/Solicitacoes!A2:M");
+  return ((result.values ?? []) as unknown[][]).map((r) => ({
+    id: String(r[0] ?? ""), razaoSocial: String(r[1] ?? ""), nomeFantasia: String(r[2] ?? ""),
+    cnpj: String(r[3] ?? ""), nome: String(r[4] ?? ""), usuario: String(r[5] ?? "").trim().toLowerCase(),
+    senha: String(r[6] ?? ""), email: String(r[7] ?? "").trim().toLowerCase(), telefone: String(r[8] ?? ""),
+    status: String(r[9] ?? ""), criadoEm: String(r[10] ?? ""),
+  }));
+}
+export async function submitAccessRequest(input: { razaoSocial: string; nomeFantasia: string; cnpj: string; nome: string; usuario: string; senha: string; email: string; telefone: string }) {
+  const all = await accessRequests();
+  const username = input.usuario.trim().toLowerCase();
+  if (all.some((r) => r.usuario === username && r.status.toUpperCase() === "PENDENTE")) throw new Error("Já existe uma solicitação pendente para esse usuário.");
+  if ((await users()).some((u) => u.email === username)) throw new Error("Esse usuário já está cadastrado.");
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await append("Solicitacoes", "A1:M1", [id, input.razaoSocial.trim(), input.nomeFantasia.trim(), input.cnpj.replace(/\\D/g, ""), input.nome.trim(), username, input.senha, input.email.trim().toLowerCase(), input.telefone.trim(), "PENDENTE", now, "", ""]);
+  return { ok: true, id };
+}
+export async function listAccessRequests() {
+  await requireGeneralAdmin();
+  return (await accessRequests()).filter((r) => r.status.toUpperCase() === "PENDENTE").map(({ senha, ...r }) => r);
+}
+export async function approveAccessRequest(requestId: string) {
+  const actor = await requireGeneralAdmin();
+  const rows = await accessRequests();
+  const item = rows.find((r) => r.id === requestId);
+  if (!item || item.status.toUpperCase() !== "PENDENTE") throw new Error("Solicitação não encontrada ou já analisada.");
+  const allCompanies = await companies();
+  const allUsers = await users();
+  if (allCompanies.some((r) => item.cnpj && String(r[3] ?? "").replace(/\\D/g, "") === item.cnpj)) throw new Error("Já existe uma empresa cadastrada com esse CNPJ.");
+  if (allUsers.some((u) => u.email === item.usuario)) throw new Error("Esse usuário já foi cadastrado.");
+  const now = new Date().toISOString();
+  const companyId = crypto.randomUUID(), userId = crypto.randomUUID();
+  await append("Empresas", "A1:K1", [companyId, item.razaoSocial, item.nomeFantasia, item.cnpj, item.email, item.telefone, "ATIVA", "", now, now, actor.email]);
+  await append("Usuarios", "A1:J1", [userId, item.nome, item.usuario, item.senha, "company_admin", companyId, "SIM", "{}", now, ""]);
+  const latest = await accessRequests();
+  const index = latest.findIndex((r) => r.id === requestId);
+  if (index < 0) throw new Error("Não foi possível localizar a solicitação após criar a conta.");
+  await request(`/values/Solicitacoes!J${index + 2}:M${index + 2}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [["APROVADA", now, actor.email, companyId]] }) });
+  await audit(actor, "approve_access_request", { requestId, companyId, userId }, companyId);
+  return { ok: true, companyId, userId };
+}
+\nexport async function requireGeneralAdmin() {
   const user = await currentCentralUser();
   if (!user || user.papel !== "general_admin") throw new Error("Acesso restrito ao administrador geral.");
   return user;
