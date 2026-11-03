@@ -24,7 +24,7 @@ export const signup = createServerFn({ method: "POST" })
     if (all.some((r) => r[3]?.toLowerCase() === data.email)) throw new Error("Já existe uma empresa com este e-mail.");
     const max = all.reduce((m, r) => Math.max(m, parseInt((r[0] || "").replace(/\D/g, ""), 10) || 0), 0);
     const cid = `EMP-${String(max + 1).padStart(3, "0")}`;
-    const hash = await hashPassword(data.password);
+    const hash = data.password;
     const sid = await createCompanySpreadsheet(data.company, data.email);
     await appendCompany([cid, data.company, data.owner, data.email, hash, sid, new Date().toISOString()]);
     await startSession({ cid, name: data.company, sid });
