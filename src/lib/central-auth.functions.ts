@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { centralLogin, centralLogout, currentCentralUser, createCompanyAndAdmin, listCompanies, setCompanyStatus } from "./central-auth.server";
+import { centralLogin, centralLogout, currentCentralUser, createCompanyAndAdmin, listCompanies, setCompanyStatus, submitAccessRequest, listAccessRequests, approveAccessRequest } from "./central-auth.server";
 
 export const centralGetSession = createServerFn({ method: "GET" }).handler(async () => {
   const user = await currentCentralUser();
@@ -46,3 +46,22 @@ export const saveCentralCompanySheet = createServerFn({ method: "POST" })
     const { saveCurrentCompanySheet } = await import("./central-auth.server");
     return saveCurrentCompanySheet(data.link);
   });
+
+export const submitCompanyAccessRequest = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({
+    razaoSocial: z.string().trim().min(2).max(180),
+    nomeFantasia: z.string().trim().min(2).max(120),
+    cnpj: z.string().trim().max(18),
+    nome: z.string().trim().min(2).max(120),
+    usuario: z.string().trim().min(3).max(80).regex(/^[a-zA-Z0-9._-]+$/),
+    senha: z.string().min(8).max(200),
+    email: z.string().trim().email().max(200),
+    telefone: z.string().trim().max(30),
+  }).parse(d))
+  .handler(async ({ data }) => submitAccessRequest(data));
+
+export const adminListAccessRequests = createServerFn({ method: "GET" }).handler(async () => listAccessRequests());
+
+export const adminApproveAccessRequest = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ requestId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => approveAccessRequest(data.requestId));
