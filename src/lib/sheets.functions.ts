@@ -1,148 +1,88 @@
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-import { requireCompanySheet } from "./auth.server";
+import { supabase } from "@/integrations/supabase/client";
 import { TAB_NAMES, type SheetData, type TabName } from "./sheets-config";
 
-const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
-
-function headers() {
-  const a = process.env["LOVABLE_API_KEY"];
-  const b = process.env["GOOGLE_SHEETS_API_KEY"];
-  if (!a || !b) throw new Error("Conexão com Google Sheets não configurada");
-  return { Authorization: `Bearer ${a}`, "X-Connection-Api-Key": b, "Content-Type": "application/json" };
+type Row = Record<string, any>;
+const tables: Record<TabName, string> = {
+  Servicos: "services", Atendimentos: "attendances", Materiais: "materials",
+  Recebimentos: "receipts", Despesas: "expenses",
+};
+const columns: Record<TabName, string[]> = {
+  Servicos: ["service_code","scheduled_date","client","phone","description","status","price","notes","id"],
+  Atendimentos: ["attendance_date","client","contact","channel","subject","notes","id"],
+  Materiais: ["material_date","service_code","material","supplier","quantity","unit_cost","total_cost","id"],
+  Recebimentos: ["receipt_date","service_code","client","amount","payment_method","id"],
+  Despesas: ["expense_date","service_code","category","description","amount","id"],
+};
+const numberAt = (v: string | undefined) => v ? Number(v.replace(",", ".")) || 0 : 0;
+const dateOrNull = (v: string | undefined) => v || null;
+async function companyId() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error("Sua sessão expirou. Entre novamente.");
+  return user.id;
 }
-
-async function call(url: string, init?: RequestInit) {
-  const r = await fetch(url, { ...init, headers: headers() });
-  if (!r.ok) {
-    const t = await r.text();
-    console.error(`Sheets ${r.status}: ${t}`);
-    throw new Error(`Erro na planilha [${r.status}]: ${t}`);
-  }
-  return r.json();
+function toLegacy(tab: TabName, row: Row): string[] {
+  const value = (key: string) => row[key] == null ? "" : String(row[key]);
+  return columns[tab].map(value);
 }
-
-async function readAll(): Promise<SheetData> {
-  const SPREADSHEET_ID = await requireCompanySheet();
-  const qs = TAB_NAMES.map((t) => `ranges=${t}!A2:H`).join("&");
-  const j = await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values:batchGet?${qs}`);
+export async function getSheetData(): Promise<SheetData> {
   const out = {} as SheetData;
-  TAB_NAMES.forEach((t, i) => {
-    out[t] = ((j.valueRanges?.[i]?.values ?? []) as unknown[][]).map((r) => r.map((c) => String(c ?? "")));
-  });
+  for (const tab of TAB_NAMES) {
+    const { data, error } = await supabase.from(tables[tab] as any).select("*").order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    out[tab] = ((data ?? []) as Row[]).map(row => toLegacy(tab, row));
+  }
   return out;
 }
-
-export const getSheetData = createServerFn({ method: "GET" }).handler(async () => readAll());
-
-export const addRow = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
-    z
-      .object({
-        tab: z.enum(TAB_NAMES as [TabName, ...TabName[]]),
-        values: z.array(z.string().max(2000)).max(10),
-      })
-      .parse(d),
-  )
-  .handler(async ({ data }) => {
-    const SPREADSHEET_ID = await requireCompanySheet();
-    let row: (string | number)[] = data.values.map((v) => {
-      const n = Number(v);
-      return v !== "" && /^-?\d+(\.\d+)?$/.test(v) && !Number.isNaN(n) ? n : v;
-    });
-    if (data.tab === "Servicos") {
-      const current = await readAll();
-      const max = current.Servicos.reduce((m, r) => {
-        const n = parseInt((r[0] || "").replace(/\D/g, ""), 10);
-        return Number.isNaN(n) ? m : Math.max(m, n);
-      }, 0);
-      row = [`S-${String(max + 1).padStart(3, "0")}`, ...row];
+export async function addRow(input: { data: { tab: TabName; values: string[] } }) {
+  const { tab, values } = input.data;
+  const company_id = await companyId();
+  const v = (i: number) => values[i] ?? "";
+  let row: Row;
+  switch (tab) {
+    case "Servicos": {
+      const { data: existing, error } = await supabase.from("services").select("service_code").order("created_at", { ascending: false }).limit(1);
+      if (error) throw new Error(error.message);
+      const next = (existing ?? []).reduce((max: number, r: any) => Math.max(max, Number(String(r.service_code).replace(/\D/g,"")) || 0), 0) + 1;
+      row = { company_id, service_code: `S-${String(next).padStart(3,"0")}`, scheduled_date: dateOrNull(v(0)), client: v(1), phone: v(2), description: v(3), status: v(4) || "Agendado", price: numberAt(v(5)), notes: v(6) }; break;
     }
-    if (data.tab === "Materiais") {
-      const q = Number(row[4]) || 0;
-      const u = Number(row[5]) || 0;
-      row = [...row.slice(0, 6), Math.round(q * u * 100) / 100];
-    }
-    await call(
-      `${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values/${data.tab}!A1:H1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-      { method: "POST", body: JSON.stringify({ values: [row] }) },
-    );
-    return { ok: true };
-  });
-
-export const updateRow = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
-    z.object({
-      tab: z.enum(TAB_NAMES as [TabName, ...TabName[]]),
-      row: z.number().int().min(2).max(100000),
-      values: z.array(z.string().max(2000)).max(10),
-    }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    const SPREADSHEET_ID = await requireCompanySheet();
-    const row = data.values.map((v) => {
-      const n = Number(v);
-      return v !== "" && /^-?\d+(\.\d+)?$/.test(v) && !Number.isNaN(n) ? n : v;
-    });
-    const startColumn = data.tab === "Servicos" ? "B" : "A";
-    if (data.tab === "Materiais") {
-      const q = Number(row[4]) || 0;
-      const u = Number(row[5]) || 0;
-      row.push(Math.round(q * u * 100) / 100);
-    }
-    const endColumn = data.tab === "Servicos" ? "H" : data.tab === "Materiais" ? "G" : String.fromCharCode(64 + row.length);
-    await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values/${data.tab}!${startColumn}${data.row}:${endColumn}${data.row}?valueInputOption=USER_ENTERED`, {
-      method: "PUT",
-      body: JSON.stringify({ values: [row] }),
-    });
-    return { ok: true };
-  });
-
-export const deleteRow = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
-    z
-      .object({
-        tab: z.enum(TAB_NAMES as [TabName, ...TabName[]]),
-        row: z.number().int().min(2).max(100000),
-      })
-      .parse(d),
-  )
-  .handler(async ({ data }) => {
-    const SPREADSHEET_ID = await requireCompanySheet();
-    const meta = await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}`);
-    const sheet = meta.sheets?.find((s: { properties: { title: string; sheetId: number } }) => s.properties.title === data.tab);
-    if (!sheet) throw new Error("Aba não encontrada");
-    await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
-      method: "POST",
-      body: JSON.stringify({
-        requests: [
-          {
-            deleteDimension: {
-              range: {
-                sheetId: sheet.properties.sheetId,
-                dimension: "ROWS",
-                startIndex: data.row - 1,
-                endIndex: data.row,
-              },
-            },
-          },
-        ],
-      }),
-    });
-    return { ok: true };
-  });
-
-export const updateStatus = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ id: z.string().max(20), status: z.string().max(40) }).parse(d))
-  .handler(async ({ data }) => {
-    const SPREADSHEET_ID = await requireCompanySheet();
-    const all = await readAll();
-    const idx = all.Servicos.findIndex((r) => r[0] === data.id);
-    if (idx < 0) throw new Error("Serviço não encontrado");
-    const rowNum = idx + 2;
-    await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values/Servicos!F${rowNum}?valueInputOption=USER_ENTERED`, {
-      method: "PUT",
-      body: JSON.stringify({ values: [[data.status]] }),
-    });
-    return { ok: true };
-  });
+    case "Atendimentos": row = { company_id, attendance_date: dateOrNull(v(0)), client: v(1), contact: v(2), channel: v(3), subject: v(4), notes: v(5) }; break;
+    case "Materiais": row = { company_id, material_date: dateOrNull(v(0)), service_code: v(1) || null, material: v(2), supplier: v(3), quantity: numberAt(v(4)), unit_cost: numberAt(v(5)) }; break;
+    case "Recebimentos": row = { company_id, receipt_date: dateOrNull(v(0)), service_code: v(1), client: v(2), amount: numberAt(v(3)), payment_method: v(4) }; break;
+    case "Despesas": row = { company_id, expense_date: dateOrNull(v(0)), service_code: v(1) || null, category: v(2), description: v(3), amount: numberAt(v(4)) }; break;
+  }
+  const { error } = await supabase.from(tables[tab] as any).insert(row);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+export async function updateRow(input: { data: { tab: TabName; row: number; values: string[] } }) {
+  const { tab, row: rowNumber, values } = input.data;
+  const data = await getSheetData();
+  const id = data[tab][rowNumber - 2]?.[columns[tab].length - 1];
+  if (!id) throw new Error("Registro não encontrado. Atualize a tela e tente novamente.");
+  const v = (i: number) => values[i] ?? "";
+  let patch: Row;
+  switch (tab) {
+    case "Servicos": patch = { scheduled_date: dateOrNull(v(0)), client:v(1), phone:v(2), description:v(3), status:v(4), price:numberAt(v(5)), notes:v(6) }; break;
+    case "Atendimentos": patch = { attendance_date:dateOrNull(v(0)), client:v(1), contact:v(2), channel:v(3), subject:v(4), notes:v(5) }; break;
+    case "Materiais": patch = { material_date:dateOrNull(v(0)), service_code:v(1)||null, material:v(2), supplier:v(3), quantity:numberAt(v(4)), unit_cost:numberAt(v(5)) }; break;
+    case "Recebimentos": patch = { receipt_date:dateOrNull(v(0)), service_code:v(1), client:v(2), amount:numberAt(v(3)), payment_method:v(4) }; break;
+    case "Despesas": patch = { expense_date:dateOrNull(v(0)), service_code:v(1)||null, category:v(2), description:v(3), amount:numberAt(v(4)) }; break;
+  }
+  const { error } = await supabase.from(tables[tab] as any).update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+export async function deleteRow(input: { data: { tab: TabName; row: number } }) {
+  const { tab, row: rowNumber } = input.data;
+  const data = await getSheetData();
+  const id = data[tab][rowNumber - 2]?.[columns[tab].length - 1];
+  if (!id) throw new Error("Registro não encontrado. Atualize a tela e tente novamente.");
+  const { error } = await supabase.from(tables[tab] as any).delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+export async function updateStatus(input: { data: { id: string; status: string } }) {
+  const { error } = await supabase.from("services").update({ status: input.data.status }).eq("service_code", input.data.id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
