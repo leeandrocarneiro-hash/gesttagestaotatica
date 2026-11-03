@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useWebMCP } from "use-webmcp-tool";
 import { runWebMCPTool } from "@/lib/webmcp-telemetry";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { RefreshCw, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
@@ -211,9 +211,6 @@ function Dashboard({ accessToken }: { accessToken: string }) {
             </Button>
 
             <ReportPdfButton data={data} />
-            <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-              <span><Download /> Baixar planilha (.xlsx)</span>
-            </Button>
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4">
