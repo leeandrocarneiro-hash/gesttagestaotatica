@@ -44,11 +44,11 @@ function LoginPage() {
       <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-xl border bg-card p-6 shadow-sm">
         <div>
           <h1 className="text-2xl font-bold">Gestão de Serviços</h1>
-          <p className="text-sm text-muted-foreground">Entre com o usuário e a senha cadastrados pela equipe GESTTA. No primeiro acesso, você será orientado a conectar sua planilha Google.</p>
+          <p className="text-sm text-muted-foreground">Entre com o login da sua empresa.</p>
         </div>
         <label className="block space-y-1 text-sm">
-          <span>Usuário (e-mail cadastrado)</span>
-          <input className="field w-full" type="text" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" placeholder="Digite o usuário recebido do GESTTA" required />
+          <span>E-mail de acesso</span>
+          <input className="field w-full" type="email" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" required />
         </label>
         <label className="block space-y-1 text-sm">
           <span>Senha</span>
