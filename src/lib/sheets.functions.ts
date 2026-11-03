@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { SPREADSHEET_ID, TAB_NAMES, type SheetData, type TabName } from "./sheets-config";
+import { requireSession } from "./auth.server";
+import { TAB_NAMES, type SheetData, type TabName } from "./sheets-config";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
 
@@ -21,7 +22,7 @@ async function call(url: string, init?: RequestInit) {
   return r.json();
 }
 
-async function readAll(): Promise<SheetData> {
+async function readAll(SPREADSHEET_ID: string): Promise<SheetData> {
   const qs = TAB_NAMES.map((t) => `ranges=${t}!A2:H`).join("&");
   const j = await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values:batchGet?${qs}`);
   const out = {} as SheetData;
@@ -31,7 +32,7 @@ async function readAll(): Promise<SheetData> {
   return out;
 }
 
-export const getSheetData = createServerFn({ method: "GET" }).handler(async () => readAll());
+export const getSheetData = createServerFn({ method: "GET" }).handler(async () => readAll((await requireSession()).sid));
 
 export const addRow = createServerFn({ method: "POST" })
   .inputValidator((d) =>
@@ -43,12 +44,13 @@ export const addRow = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const SPREADSHEET_ID = (await requireSession()).sid;
     let row: (string | number)[] = data.values.map((v) => {
       const n = Number(v);
       return v !== "" && /^-?\d+(\.\d+)?$/.test(v) && !Number.isNaN(n) ? n : v;
     });
     if (data.tab === "Servicos") {
-      const current = await readAll();
+      const current = await readAll(SPREADSHEET_ID);
       const max = current.Servicos.reduce((m, r) => {
         const n = parseInt((r[0] || "").replace(/\D/g, ""), 10);
         return Number.isNaN(n) ? m : Math.max(m, n);
@@ -77,6 +79,7 @@ export const deleteRow = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const SPREADSHEET_ID = (await requireSession()).sid;
     const meta = await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}`);
     const sheet = meta.sheets?.find((s: { properties: { title: string; sheetId: number } }) => s.properties.title === data.tab);
     if (!sheet) throw new Error("Aba não encontrada");
@@ -103,7 +106,8 @@ export const deleteRow = createServerFn({ method: "POST" })
 export const updateStatus = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ id: z.string().max(20), status: z.string().max(40) }).parse(d))
   .handler(async ({ data }) => {
-    const all = await readAll();
+    const SPREADSHEET_ID = (await requireSession()).sid;
+    const all = await readAll(SPREADSHEET_ID);
     const idx = all.Servicos.findIndex((r) => r[0] === data.id);
     if (idx < 0) throw new Error("Serviço não encontrado");
     const rowNum = idx + 2;

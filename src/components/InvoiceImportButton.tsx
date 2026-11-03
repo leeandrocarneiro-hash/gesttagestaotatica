@@ -79,9 +79,9 @@ async function parsePdf(file: File): Promise<ParsedInvoice> {
   const items: ImportedItem[] = [];
   const linePattern = /\b(\d{1,6})\s+(.{3,90}?)\s+(UN|UND|PC|PÇ|KG|G|LT|L|MT|M|CX|FD)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/gi;
   for (const match of text.matchAll(linePattern)) {
-    const description = match[2].trim();
+    const description = (match[2] ?? "").trim();
     if (/^(CNPJ|DANFE|NCM|CFOP|CST|DADOS ADICIONAIS)/i.test(description)) continue;
-    items.push({ material: description, unit: match[3], quantity: String(money(match[4])), unitCost: String(money(match[5])) });
+    items.push({ material: description, unit: match[3] ?? "", quantity: String(money(match[4] ?? "")), unitCost: String(money(match[5] ?? "")) });
   }
   return { supplier, date, number, key, items };
 }
