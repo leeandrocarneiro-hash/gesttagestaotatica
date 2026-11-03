@@ -20,6 +20,7 @@ export async function hashPassword(pw: string, saltB64?: string) {
 }
 
 export async function verifyPassword(pw: string, stored: string) {
+  if (!stored.startsWith("pbkdf2$")) return pw === stored;
   const [, salt] = stored.split("$");
   if (!salt) return false;
   const h = await hashPassword(pw, salt);
