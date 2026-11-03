@@ -235,3 +235,58 @@ export async function listCompanies() {
   await requireGeneralAdmin();
   return (await companies()).map((r) => ({ id: r.id, razaoSocial: r.razaoSocial, nomeFantasia: r.nomeFantasia, cnpj: r.cnpj, emailContato: r.emailContato, telefone: r.telefone, status: r.status, spreadsheetLinked: Boolean(r.spreadsheetId) }));
 }
+
+
+const GOOGLE_STATE_COOKIE = "gestta_google_oauth_state";
+function googleEnv(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Login Google ainda não configurado no servidor: ${name}`);
+  return value;
+}
+export async function startGoogleLogin() {
+  const clientId = googleEnv("GOOGLE_OAUTH_CLIENT_ID");
+  const redirectUri = googleEnv("GOOGLE_OAUTH_REDIRECT_URI");
+  const state = b64(crypto.getRandomValues(new Uint8Array(32)).buffer);
+  setCookie(GOOGLE_STATE_COOKIE, state, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 600 });
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.search = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    prompt: "select_account",
+  }).toString();
+  return { url: url.toString() };
+}
+export async function completeGoogleLogin(code: string, state: string) {
+  const expectedState = getCookie(GOOGLE_STATE_COOKIE);
+  deleteCookie(GOOGLE_STATE_COOKIE, { path: "/" });
+  if (!expectedState || !state || state !== expectedState) throw new Error("Não foi possível validar a autenticação Google. Tente novamente.");
+  const clientId = googleEnv("GOOGLE_OAUTH_CLIENT_ID");
+  const clientSecret = googleEnv("GOOGLE_OAUTH_CLIENT_SECRET");
+  const redirectUri = googleEnv("GOOGLE_OAUTH_REDIRECT_URI");
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }),
+  });
+  if (!tokenResponse.ok) throw new Error("O Google não concluiu a autenticação. Tente novamente.");
+  const tokens = await tokenResponse.json() as { id_token?: string };
+  if (!tokens.id_token) throw new Error("O Google não retornou uma identidade válida.");
+  const identityResponse = await fetch("https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(tokens.id_token));
+  if (!identityResponse.ok) throw new Error("Não foi possível validar sua identidade Google.");
+  const identity = await identityResponse.json() as { aud?: string; iss?: string; sub?: string; email?: string; email_verified?: string; name?: string };
+  if (identity.aud !== clientId || !["accounts.google.com", "https://accounts.google.com"].includes(identity.iss ?? "") || identity.email_verified !== "true" || !identity.email) {
+    throw new Error("A conta Google não passou pela validação de segurança.");
+  }
+  const email = identity.email.trim().toLowerCase();
+  const user = (await users()).find((candidate) => candidate.email === email);
+  if (!user || user.ativo.toUpperCase() !== "SIM") throw new Error("Este e-mail ainda não possui uma conta GESTTA ativa. Cadastre a empresa primeiro com este mesmo e-mail.");
+  if (user.papel === "general_admin") throw new Error("Use o acesso exclusivo do administrador geral.");
+  const company = (await companies()).find((candidate) => candidate.id === user.empresaId);
+  if (!company || company.status.toUpperCase() !== "ATIVA") throw new Error("O acesso desta empresa está indisponível.");
+  await setSession(user.id);
+  await query("UPDATE users SET last_login=? WHERE id=?", [new Date().toISOString(), user.id]);
+  return { ok: true, needsSheet: !company.spreadsheetId };
+}
