@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -9,9 +9,10 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
+import { getSession } from "@/lib/auth.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
 import { InvoiceImportButton } from "@/components/InvoiceImportButton";
-import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
+import { STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
 
@@ -141,11 +142,11 @@ function Index() {
               <RefreshCw className={refreshing ? "animate-spin" : ""} /> Atualizar
             </Button>
             <Button variant="secondary" size="sm" asChild>
-              <a href={SHEET_URL} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
+              <a href={`https://docs.google.com/spreadsheets/d/${session.spreadsheetId}/edit`} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
             </Button>
             <ReportPdfButton data={data} />
             <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-              <a href={SHEET_XLSX_URL} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
+              <a href={`https://docs.google.com/spreadsheets/d/${session.spreadsheetId}/export?format=xlsx`} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
             </Button>
           </div>
         </div>
