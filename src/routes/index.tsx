@@ -1,19 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { useWebMCP } from "use-webmcp-tool";
 import { runWebMCPTool } from "@/lib/webmcp-telemetry";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { RefreshCw, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
 import { InvoiceImportButton } from "@/components/InvoiceImportButton";
-import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
+import { STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
+import { supabase } from "@/integrations/supabase/client";
+import { linkCompanySpreadsheet } from "@/lib/company.functions";
 
-const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
+const dataQuery = (accessToken: string) => queryOptions({ queryKey: ["sheet", accessToken], queryFn: () => getSheetData({ data: { accessToken } }), staleTime: 30_000 });
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -26,7 +28,7 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(dataQuery),
+  loader: () => undefined,
   component: Index,
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-lg p-8 text-center">
@@ -70,7 +72,74 @@ function useSummary(d: SheetData) {
 const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--muted-foreground)"];
 
 function Index() {
-  const { data } = useSuspenseQuery(dataQuery);
+  const [session, setSession] = useState<any>(null);
+  const [authReady, setAuthReady] = useState(false);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthReady(true); });
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    return () => data.subscription.unsubscribe();
+  }, []);
+  if (!authReady) return <div className="p-10 text-center">Carregando...</div>;
+  if (!session) return <AuthScreen />;
+  if (!session.user) return <AuthScreen />;
+  return <CompanyGate accessToken={session.access_token} />;
+}
+
+function AuthScreen() {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [company, setCompany] = useState("");
+  const [responsible, setResponsible] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true); setMessage("");
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({ email, password, options: { data: { company_name: company, responsible_name: responsible } } });
+        if (error) throw error;
+        setMessage("Cadastro realizado. Se a confirmação de e-mail estiver ativa, confirme seu endereço e entre.");
+        setMode("login");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Não foi possível continuar."); }
+    finally { setBusy(false); }
+  };
+  return <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4"><form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+    <div><h1 className="text-2xl font-bold">GESTTA</h1><p className="text-sm text-muted-foreground">Gestão inteligente da sua empresa</p></div>
+    <div className="flex gap-2"><Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setMode("login")}>Entrar</Button><Button type="button" variant={mode === "signup" ? "default" : "outline"} onClick={() => setMode("signup")}>Criar conta</Button></div>
+    {mode === "signup" && <><input className="field" required placeholder="Nome da empresa" value={company} onChange={e=>setCompany(e.target.value)}/><input className="field" required placeholder="Nome do responsável" value={responsible} onChange={e=>setResponsible(e.target.value)}/></>}
+    <input className="field" type="email" required placeholder="E-mail" value={email} onChange={e=>setEmail(e.target.value)}/>
+    <input className="field" type="password" minLength={8} required placeholder="Senha (mínimo 8 caracteres)" value={password} onChange={e=>setPassword(e.target.value)}/>
+    {message && <p className="text-sm text-muted-foreground">{message}</p>}
+    <Button className="w-full" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}</Button>
+  </form></main>;
+}
+
+function CompanyGate({ accessToken }: { accessToken: string }) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [linked, setLinked] = useState<boolean | null>(null);
+  const [error, setError] = useState("");
+  const fn = useServerFn(linkCompanySpreadsheet);
+  useEffect(() => {
+    let active = true;
+    getSheetData({ data: { accessToken } }).then(() => { if(active) setLinked(true); }).catch((e: Error) => {
+      if(active) { if(e.message.includes("Vincule a planilha")) setLinked(false); else setError(e.message); }
+    });
+    return () => { active = false; };
+  }, [accessToken]);
+  if (linked === null && !error) return <div className="p-10 text-center">Verificando empresa...</div>;
+  if (error) return <div className="mx-auto max-w-md p-8"><p>{error}</p><Button onClick={()=>supabase.auth.signOut()}>Sair</Button></div>;
+  if (!linked) return <main className="flex min-h-screen items-center justify-center p-4"><form className="w-full max-w-lg space-y-4 rounded-xl border bg-card p-6" onSubmit={async e=>{e.preventDefault();setBusy(true);setError("");try{await fn({data:{accessToken,spreadsheetUrl:url}});setLinked(true);window.location.reload();}catch(e){setError(e instanceof Error?e.message:"Falha ao vincular.");}finally{setBusy(false);}}}><h1 className="text-xl font-bold">Vincule a planilha da sua empresa</h1><p className="text-sm text-muted-foreground">Cole o link de uma planilha Google Sheets à qual sua conta tenha acesso.</p><input className="field" required type="url" placeholder="https://docs.google.com/spreadsheets/d/..." value={url} onChange={e=>setUrl(e.target.value)}/>{error&&<p className="text-sm text-destructive">{error}</p>}<Button disabled={busy} className="w-full">{busy?"Vinculando...":"Salvar planilha"}</Button><Button type="button" variant="ghost" className="w-full" onClick={()=>supabase.auth.signOut()}>Sair</Button></form></main>;
+  return <Dashboard accessToken={accessToken}/>;
+}
+
+function Dashboard({ accessToken }: { accessToken: string }) {
+  const { data } = useSuspenseQuery(dataQuery(accessToken));
   const qc = useQueryClient();
   const s = useSummary(data);
   const [tab, setTab] = useState<TabName | "Resumo">("Resumo");
@@ -140,13 +209,8 @@ function Index() {
             >
               <RefreshCw className={refreshing ? "animate-spin" : ""} /> Atualizar
             </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <a href={SHEET_URL} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
-            </Button>
+
             <ReportPdfButton data={data} />
-            <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-              <a href={SHEET_XLSX_URL} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
-            </Button>
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4">
@@ -160,6 +224,7 @@ function Index() {
             </button>
           ))}
         </nav>
+            <Button variant="secondary" size="sm" onClick={() => supabase.auth.signOut()}>Sair</Button>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
@@ -215,7 +280,7 @@ function Index() {
                       <tr key={x.id} className="border-t">
                         <td className="px-2 py-2 font-medium">{x.id}</td>
                         <td className="px-2 py-2">{x.cliente}</td>
-                        <td className="px-2 py-2"><StatusSelect id={x.id ?? ""} value={x.status ?? ""} /></td>
+                        <td className="px-2 py-2"><StatusSelect accessToken={accessToken} id={x.id ?? ""} value={x.status ?? ""} /></td>
                         <td className="px-2 py-2">{brl(x.preco)}</td>
                         <td className="px-2 py-2">{brl(x.mat)}</td>
                         <td className="px-2 py-2">{brl(x.desp)}</td>
@@ -245,7 +310,7 @@ function Index() {
             </Panel>
           </div>
         ) : (
-          <TabView key={tab} tab={tab} data={data} />
+          <TabView key={tab} tab={tab} data={data} accessToken={accessToken} />
         )}
       </main>
     </div>
@@ -274,11 +339,11 @@ function Empty({ text = "Ainda não há lançamentos." }: { text?: string }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{text}</p>;
 }
 
-function StatusSelect({ id, value }: { id: string; value: string }) {
+function StatusSelect({ accessToken, id, value }: { accessToken: string; id: string; value: string }) {
   const qc = useQueryClient();
   const fn = useServerFn(updateStatus);
   const m = useMutation({
-    mutationFn: (status: string) => fn({ data: { id, status } }),
+    mutationFn: (status: string) => fn({ data: { accessToken, id, status } }),
     onSuccess: () => { toast.success("Status atualizado"); qc.invalidateQueries({ queryKey: ["sheet"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -289,11 +354,11 @@ function StatusSelect({ id, value }: { id: string; value: string }) {
   );
 }
 
-function DeleteButton({ tab, row, label }: { tab: TabName; row: number; label: string }) {
+function DeleteButton({ accessToken, tab, row, label }: { accessToken: string; tab: TabName; row: number; label: string }) {
   const qc = useQueryClient();
   const fn = useServerFn(deleteRow);
   const m = useMutation({
-    mutationFn: () => fn({ data: { tab, row } }),
+    mutationFn: () => fn({ data: { accessToken, tab, row } }),
     onSuccess: () => { toast.success("Lançamento excluído"); qc.invalidateQueries({ queryKey: ["sheet"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -311,7 +376,7 @@ function DeleteButton({ tab, row, label }: { tab: TabName; row: number; label: s
   );
 }
 
-function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
+function TabView({ tab, data, accessToken }: { tab: TabName; data: SheetData; accessToken: string }) {
   const cfg = TABS[tab];
   const qc = useQueryClient();
   const fn = useServerFn(addRow);
@@ -322,7 +387,7 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
   const services = data.Servicos.filter((r) => r[0]);
 
   const m = useMutation({
-    mutationFn: () => fn({ data: { tab, values: values.map((v, i) => (fields[i]?.type === "number" ? v.replace(",", ".") : v)) } }),
+    mutationFn: () => fn({ data: { accessToken, tab, values: values.map((v, i) => (fields[i]?.type === "number" ? v.replace(",", ".") : v)) } }),
     onSuccess: () => { toast.success("Lançado na planilha!"); setValues(initial()); qc.invalidateQueries({ queryKey: ["sheet"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -335,7 +400,7 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       <Panel title={`Novo lançamento — ${cfg.title}`}>
-        {tab === "Materiais" && <div className="mb-4"><InvoiceImportButton /></div>}
+        {tab === "Materiais" && <div className="mb-4"><InvoiceImportButton accessToken={accessToken} /></div>}
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">{cfg.hint}</p>
         <form onSubmit={submit} className="space-y-3">
           {fields.map((f, i) => {
@@ -390,7 +455,7 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
                 <tr key={i} className="border-t">
                   {headers.map((_, j) => <td key={j} className="px-2 py-2">{r[j]}</td>)}
                   <td className="px-2 py-2 text-right">
-                    <DeleteButton tab={tab} row={rows.length - i + 1} label={r[0] || r[1] || "este lançamento"} />
+                    <DeleteButton accessToken={accessToken} tab={tab} row={rows.length - i + 1} label={r[0] || r[1] || "este lançamento"} />
                   </td>
                 </tr>
               ))}

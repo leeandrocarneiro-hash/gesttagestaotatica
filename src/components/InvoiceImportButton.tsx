@@ -86,7 +86,7 @@ async function parsePdf(file: File): Promise<ParsedInvoice> {
   return { supplier, date, number, key, items };
 }
 
-export function InvoiceImportButton() {
+export function InvoiceImportButton({ accessToken }: { accessToken: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   const add = useServerFn(addRow);
@@ -100,7 +100,7 @@ export function InvoiceImportButton() {
     mutationFn: async () => {
       if (!invoice || !invoice.items.length) throw new Error("A nota não contém itens para importar.");
       for (const item of invoice.items) {
-        await add({ data: { tab: "Materiais", values: [invoice.date, "", item.material, invoice.supplier, item.quantity, item.unitCost] } });
+        await add({ data: { accessToken, tab: "Materiais", values: [invoice.date, "", item.material, invoice.supplier, item.quantity, item.unitCost] } });
       }
     },
     onSuccess: async () => {
