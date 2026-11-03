@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { FileUp, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -89,7 +88,7 @@ async function parsePdf(file: File): Promise<ParsedInvoice> {
 export function InvoiceImportButton() {
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
-  const add = useServerFn(addRow);
+  const add = addRow;
   const [invoice, setInvoice] = useState<ParsedInvoice | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -106,7 +105,7 @@ export function InvoiceImportButton() {
     onSuccess: async () => {
       setSaved(true);
       await qc.invalidateQueries({ queryKey: ["sheet"] });
-      toast.success("Itens da nota importados para Materiais!");
+      toast.success("Itens da nota salvos no GESTTA!");
     },
     onError: (e: Error) => toast.error(e.message),
     onSettled: () => setSaving(false),
