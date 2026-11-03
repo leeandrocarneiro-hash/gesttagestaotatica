@@ -80,7 +80,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Gestão de Serviços" },
-      { name: "description", content: "Controle de serviços, custos e lucro ligado ao Google Planilhas." },
+      { name: "description", content: "Controle de serviços, custos e lucro da sua empresa no GESTTA." },
     ],
     links: [
       {

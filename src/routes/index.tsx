@@ -1,12 +1,11 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { useWebMCP } from "use-webmcp-tool";
 import { runWebMCPTool } from "@/lib/webmcp-telemetry";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, ExternalLink, RefreshCw, Plus, Trash2, LogOut } from "lucide-react";
+import { RefreshCw, Plus, Trash2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { getSession, doLogout } from "@/lib/auth.functions";
@@ -19,15 +18,15 @@ const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetDat
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
     const session = await getSession();
-    if (!session || !session.spreadsheetId) throw redirect({ to: "/login" });
+    if (!session) throw redirect({ to: "/login" });
     return { session };
   },
   head: () => ({
     meta: [
       { title: "Gestão de Serviços — Agenda, custos e lucro" },
-      { name: "description", content: "Controle serviços agendados, atendimentos, materiais, recebimentos, despesas e lucro por serviço, ligado ao Google Planilhas." },
+      { name: "description", content: "Controle serviços agendados, atendimentos, materiais, recebimentos, despesas e lucro por serviço, com controle financeiro integrado." },
       { property: "og:title", content: "Gestão de Serviços — Agenda, custos e lucro" },
-      { property: "og:description", content: "Lance tudo no site e baixe a planilha com gráficos para reuniões." },
+      { property: "og:description", content: "Controle financeiro, serviços e resultados da sua empresa no GESTTA." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -36,7 +35,7 @@ export const Route = createFileRoute("/")({
   component: Index,
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-lg p-8 text-center">
-      <h1 className="text-xl font-semibold">Não foi possível ler a planilha</h1>
+      <h1 className="text-xl font-semibold">Não foi possível carregar os dados do GESTTA</h1>
       <p className="mt-2 text-sm text-muted-foreground">{(error as Error).message}</p>
     </div>
   ),
@@ -78,15 +77,14 @@ const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--cha
 function Index() {
   const { session } = Route.useRouteContext();
   const navigate = useNavigate();
-  const logoutFn = useServerFn(doLogout);
+  
   const { data } = useSuspenseQuery(dataQuery);
   const qc = useQueryClient();
   const s = useSummary(data);
   const [tab, setTab] = useState<TabName | "Resumo">("Resumo");
   const [refreshing, setRefreshing] = useState(false);
 
-  // Revalida os dados quando o usuário retorna de uma aba externa (Google Sheets/XLSX).
-  // Isso força os gráficos do Recharts a renderizarem novamente após a troca de foco.
+  // Atualiza os dados quando o usuário retorna à aba do GESTTA.
   useEffect(() => {
     const refreshOnReturn = () => {
       if (document.visibilityState === "visible") {
@@ -133,8 +131,8 @@ function Index() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-2xl font-bold">Gestão de Serviços</h1>
-              <p className="text-sm opacity-80">Tudo lançado aqui vai direto para sua planilha Google.</p>
+              <h1 className="text-2xl font-bold">GESTTA</h1>
+              <p className="text-sm opacity-80">{session.empresa} · Gestão financeira em um só lugar.</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -149,13 +147,8 @@ function Index() {
             >
               <RefreshCw className={refreshing ? "animate-spin" : ""} /> Atualizar
             </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <a href={`https://docs.google.com/spreadsheets/d/${session.spreadsheetId}/edit`} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
-            </Button>
             <ReportPdfButton data={data} />
-            <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-              <a href={`https://docs.google.com/spreadsheets/d/${session.spreadsheetId}/export?format=xlsx`} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
-            </Button>
+            <Button variant="secondary" size="sm" onClick={async () => { await logoutFn(); await navigate({ to: "/login", replace: true }); }}><LogOut /> Sair</Button>
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4">
@@ -285,7 +278,7 @@ function Empty({ text = "Ainda não há lançamentos." }: { text?: string }) {
 
 function StatusSelect({ id, value }: { id: string; value: string }) {
   const qc = useQueryClient();
-  const fn = useServerFn(updateStatus);
+  const fn = updateStatus;
   const m = useMutation({
     mutationFn: (status: string) => fn({ data: { id, status } }),
     onSuccess: () => { toast.success("Status atualizado"); qc.invalidateQueries({ queryKey: ["sheet"] }); },
@@ -300,7 +293,7 @@ function StatusSelect({ id, value }: { id: string; value: string }) {
 
 function DeleteButton({ tab, row, label }: { tab: TabName; row: number; label: string }) {
   const qc = useQueryClient();
-  const fn = useServerFn(deleteRow);
+  const fn = deleteRow;
   const m = useMutation({
     mutationFn: () => fn({ data: { tab, row } }),
     onSuccess: () => { toast.success("Lançamento excluído"); qc.invalidateQueries({ queryKey: ["sheet"] }); },
@@ -323,7 +316,7 @@ function DeleteButton({ tab, row, label }: { tab: TabName; row: number; label: s
 function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
   const cfg = TABS[tab];
   const qc = useQueryClient();
-  const fn = useServerFn(addRow);
+  const fn = addRow;
   const today = new Date().toISOString().slice(0, 10);
   const fields = cfg.fields as Field[];
   const initial = (): string[] => fields.map((f) => (f.type === "date" ? today : f.type === "select" && f.required ? (f.options?.[0] ?? "") : ""));
@@ -332,7 +325,7 @@ function TabView({ tab, data }: { tab: TabName; data: SheetData }) {
 
   const m = useMutation({
     mutationFn: () => fn({ data: { tab, values: values.map((v, i) => (fields[i]?.type === "number" ? v.replace(",", ".") : v)) } }),
-    onSuccess: () => { toast.success("Lançado na planilha!"); setValues(initial()); qc.invalidateQueries({ queryKey: ["sheet"] }); },
+    onSuccess: () => { toast.success("Lançamento salvo no GESTTA!"); setValues(initial()); qc.invalidateQueries({ queryKey: ["sheet"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
 

@@ -1,8 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { doLogin, registerCompany } from "@/lib/auth.functions";
+import { doLogin, registerCompany, requestPasswordReset, updateRecoveredPassword } from "@/lib/auth.functions";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/login")({
@@ -11,8 +10,6 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const loginFn = useServerFn(doLogin);
-  const registerFn = useServerFn(registerCompany);
   const navigate = useNavigate();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [companyName, setCompanyName] = useState("");
@@ -20,16 +17,36 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recovery, setRecovery] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("recovery") === "1" || window.location.hash.includes("type=recovery")) setRecovery(true);
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     try {
       if (mode === "register") {
-        await registerFn({ data: { companyName, displayName, email, password } });
-        toast.success("Empresa cadastrada e planilha criada!");
+        const result = await registerCompany({ data: { companyName, displayName, email, password } });
+        if (result.confirmationRequired) {
+          toast.success("Cadastro recebido! Confirme seu e-mail para acessar o GESTTA.");
+          setMode("login");
+          return;
+        }
+        toast.success("Empresa cadastrada com sucesso!");
       } else {
-        await loginFn({ data: { login: email, senha: password } });
+        if (recovery) {
+          await updateRecoveredPassword(newPassword);
+          toast.success("Senha atualizada. Entre com sua nova senha.");
+          setRecovery(false);
+          setPassword("");
+          setNewPassword("");
+          return;
+        }
+        await doLogin({ data: { login: email, senha: password } });
       }
       navigate({ to: "/", replace: true });
     } catch (error) {
@@ -57,8 +74,11 @@ function LoginPage() {
           </>}
           <label className="block space-y-1 text-sm"><span>E-mail</span><input className="field w-full" type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" required maxLength={200} /></label>
           <label className="block space-y-1 text-sm"><span>Senha</span><input className="field w-full" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={mode === "register" ? "new-password" : "current-password"} required minLength={mode === "register" ? 12 : 1} maxLength={200} /></label>
-          {mode === "register" && <p className="text-xs text-muted-foreground">Use pelo menos 12 caracteres. Uma planilha exclusiva será criada para sua empresa.</p>}
-          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta da empresa"}</Button>
+          {mode === "register" && <p className="text-xs text-muted-foreground">Use pelo menos 12 caracteres. Os dados da sua empresa ficarão separados dos demais clientes.</p>}
+          {recovery && <label className="block space-y-1 text-sm"><span>Nova senha</span><input className="field w-full" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={12} required autoComplete="new-password" /></label>}
+          {mode === "login" && !recovery && <button type="button" className="text-sm text-primary underline" onClick={async () => { try { await requestPasswordReset(email); toast.success("Se o e-mail estiver cadastrado, você receberá o link de recuperação."); } catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível solicitar a recuperação."); } }}>Esqueci minha senha</button>}
+          {recovery && <button type="button" className="text-sm text-primary underline" onClick={() => setRecovery(false)}>Voltar ao login</button>}
+          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Aguarde..." : recovery ? "Salvar nova senha" : mode === "login" ? "Entrar" : "Criar conta da empresa"}</Button>
         </form>
       </section>
     </main>
