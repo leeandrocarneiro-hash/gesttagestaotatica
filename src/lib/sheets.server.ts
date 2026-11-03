@@ -1,5 +1,4 @@
-import { TAB_NAMES, type SheetData, type TabName } from "./sheets-config";
-import { requireCurrentCompanySheet } from "./central-auth.server";
+import { SPREADSHEET_ID, TAB_NAMES, type SheetData, type TabName } from "./sheets-config";
 
 export const GATEWAY = "https://connector-gateway.lovable.dev/google_sheets/v4";
 
@@ -21,9 +20,8 @@ export async function call(url: string, init?: RequestInit) {
 }
 
 export async function readAll(): Promise<SheetData> {
-  const spreadsheetId = await requireCurrentCompanySheet();
   const qs = TAB_NAMES.map((t) => `ranges=${t}!A2:H`).join("&");
-  const j = await call(`${GATEWAY}/spreadsheets/${spreadsheetId}/values:batchGet?${qs}`);
+  const j = await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values:batchGet?${qs}`);
   const out = {} as SheetData;
   TAB_NAMES.forEach((t, i) => {
     out[t] = ((j.valueRanges?.[i]?.values ?? []) as unknown[][]).map((r) => r.map((c) => String(c ?? "")));
@@ -32,7 +30,6 @@ export async function readAll(): Promise<SheetData> {
 }
 
 export async function appendRow(tab: TabName, values: string[]) {
-  const spreadsheetId = await requireCurrentCompanySheet();
   let row: (string | number)[] = values.map((v) => {
     const n = Number(v);
     return v !== "" && /^-?\d+(\.\d+)?$/.test(v) && !Number.isNaN(n) ? n : v;
@@ -53,18 +50,17 @@ export async function appendRow(tab: TabName, values: string[]) {
     row = [...row.slice(0, 6), Math.round(q * u * 100) / 100];
   }
   await call(
-    `${GATEWAY}/spreadsheets/${spreadsheetId}/values/${tab}!A1:H1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values/${tab}!A1:H1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     { method: "POST", body: JSON.stringify({ values: [row] }) },
   );
   return { ok: true, id };
 }
 
 export async function setServiceStatus(id: string, status: string) {
-  const spreadsheetId = await requireCurrentCompanySheet();
   const all = await readAll();
   const idx = all.Servicos.findIndex((r) => r[0] === id);
   if (idx < 0) throw new Error("Serviço não encontrado");
-  await call(`${GATEWAY}/spreadsheets/${spreadsheetId}/values/Servicos!F${idx + 2}?valueInputOption=USER_ENTERED`, {
+  await call(`${GATEWAY}/spreadsheets/${SPREADSHEET_ID}/values/Servicos!F${idx + 2}?valueInputOption=USER_ENTERED`, {
     method: "PUT",
     body: JSON.stringify({ values: [[status]] }),
   });

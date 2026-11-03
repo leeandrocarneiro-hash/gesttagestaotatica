@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -6,22 +6,16 @@ import { toast } from "sonner";
 import { useWebMCP } from "use-webmcp-tool";
 import { runWebMCPTool } from "@/lib/webmcp-telemetry";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, ExternalLink, RefreshCw, Plus, Trash2, LogOut } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
-import { getSession, doLogout } from "@/lib/auth.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
 import { InvoiceImportButton } from "@/components/InvoiceImportButton";
-import { STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
+import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
 
 export const Route = createFileRoute("/")({
-  beforeLoad: async () => {
-    const session = await getSession();
-    if (!session || !session.spreadsheetId) throw redirect({ to: "/login" });
-    return { session };
-  },
   head: () => ({
     meta: [
       { title: "Gestão de Serviços — Agenda, custos e lucro" },
@@ -76,9 +70,6 @@ function useSummary(d: SheetData) {
 const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--muted-foreground)"];
 
 function Index() {
-  const { session } = Route.useRouteContext();
-  const navigate = useNavigate();
-  const logoutFn = useServerFn(doLogout);
   const { data } = useSuspenseQuery(dataQuery);
   const qc = useQueryClient();
   const s = useSummary(data);
@@ -150,11 +141,11 @@ function Index() {
               <RefreshCw className={refreshing ? "animate-spin" : ""} /> Atualizar
             </Button>
             <Button variant="secondary" size="sm" asChild>
-              <a href={`https://docs.google.com/spreadsheets/d/${session.spreadsheetId}/edit`} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
+              <a href={SHEET_URL} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
             </Button>
             <ReportPdfButton data={data} />
             <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-              <a href={`https://docs.google.com/spreadsheets/d/${session.spreadsheetId}/export?format=xlsx`} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
+              <a href={SHEET_XLSX_URL} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
             </Button>
           </div>
         </div>
