@@ -126,3 +126,36 @@ drop trigger if exists on_auth_user_created_company on auth.users;
 create trigger on_auth_user_created_company
   after insert on auth.users
   for each row execute procedure public.handle_new_company();
+
+
+-- Company account status. Defaults preserve access for existing records.
+alter table public.companies
+  add column if not exists is_active boolean not null default true;
+
+-- Company users cannot change account status or profile through direct table updates.
+drop policy if exists "company updates own profile" on public.companies;
+
+-- Platform administrator grants are assigned only by a trusted database operator.
+create table if not exists public.gestta_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.gestta_admins enable row level security;
+drop policy if exists "admin can read own admin grant" on public.gestta_admins;
+create policy "admin can read own admin grant"
+  on public.gestta_admins for select to authenticated
+  using (user_id = auth.uid());
+
+create or replace function public.is_gestta_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.gestta_admins a where a.user_id = auth.uid()
+  );
+$$;
+revoke all on function public.is_gestta_admin() from public;
+grant execute on function public.is_gestta_admin() to authenticated;
