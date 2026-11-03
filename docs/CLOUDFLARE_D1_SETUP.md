@@ -35,3 +35,17 @@ O importador copia empresas, usuários (incluindo hashes/salts de senha existent
 - O D1 precisa estar criado e as variáveis secretas configuradas no ambiente de hospedagem. Sem isso, login/cadastro falhará de forma fechada; não existe fallback silencioso para a antiga planilha.
 - A planilha central antiga deve ser mantida como backup até validar a migração e todos os acessos.
 - Esta alteração não deve ser considerada pronta para produção antes de executar o build/testes e validar o D1 no ambiente real.
+
+
+## 4. Login com Google
+
+O GESTTA oferece o botão **Continuar com Google** para contas já cadastradas. O e-mail verificado da conta Google deve ser o mesmo e-mail da conta GESTTA. Por segurança, o login Google não cria automaticamente uma empresa nem vincula um e-mail diferente.
+
+Configure no ambiente de servidor:
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+
+No Google Cloud Console, crie um OAuth Client ID do tipo **Aplicativo da Web**, habilite o fluxo OAuth e cadastre exatamente a URL de retorno configurada em `GOOGLE_OAUTH_REDIRECT_URI` (por exemplo, `https://gesttagestaotatica.lovable.app/google-callback`). Adicione também o domínio do GESTTA em **Authorized JavaScript origins** quando solicitado pelo console.
+
+O fluxo usa authorization code, valida o estado anti-CSRF, confirma o token de identidade no Google e só então cria a sessão segura do GESTTA. O segredo OAuth deve permanecer apenas no servidor e nunca receber prefixo `VITE_`.
