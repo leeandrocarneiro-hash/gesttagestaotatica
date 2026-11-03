@@ -1,15 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { getMe, logout } from "@/lib/auth.functions";
 import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, Plus, Trash2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSheetData, addRow, updateStatus, deleteRow } from "@/lib/sheets.functions";
 import { ReportPdfButton } from "@/components/ReportPdfButton";
 import { InvoiceImportButton } from "@/components/InvoiceImportButton";
-import { SHEET_URL, SHEET_XLSX_URL, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
+import { sheetUrl, sheetXlsxUrl, STATUS, TABS, TAB_NAMES, type SheetData, type TabName, type Field } from "@/lib/sheets-config";
 
 const dataQuery = queryOptions({ queryKey: ["sheet"], queryFn: () => getSheetData(), staleTime: 30_000 });
 
@@ -24,6 +25,11 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  beforeLoad: async () => {
+    const me = await getMe();
+    if (!me) throw redirect({ to: "/login" });
+    return { me };
+  },
   loader: ({ context }) => context.queryClient.ensureQueryData(dataQuery),
   component: Index,
   errorComponent: ({ error }) => (
@@ -69,6 +75,9 @@ const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--cha
 
 function Index() {
   const { data } = useSuspenseQuery(dataQuery);
+  const { me } = Route.useRouteContext();
+  const navigate = useNavigate();
+  const logoutFn = useServerFn(logout);
   const qc = useQueryClient();
   const s = useSummary(data);
   const [tab, setTab] = useState<TabName | "Resumo">("Resumo");
@@ -82,7 +91,7 @@ function Index() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-2xl font-bold">Gestão de Serviços</h1>
+              <h1 className="text-2xl font-bold">{me.name}</h1>
               <p className="text-sm opacity-80">Tudo lançado aqui vai direto para sua planilha Google.</p>
             </div>
           </div>
@@ -99,11 +108,22 @@ function Index() {
               <RefreshCw className={refreshing ? "animate-spin" : ""} /> Atualizar
             </Button>
             <Button variant="secondary" size="sm" asChild>
-              <a href={SHEET_URL} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
+              <a href={sheetUrl(me.spreadsheetId)} target="_blank" rel="noreferrer"><ExternalLink /> Abrir planilha</a>
             </Button>
             <ReportPdfButton data={data} />
             <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-              <a href={SHEET_XLSX_URL} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
+              <a href={sheetXlsxUrl(me.spreadsheetId)} target="_blank" rel="noopener noreferrer"><Download /> Baixar planilha (.xlsx)</a>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                await logoutFn();
+                qc.clear();
+                navigate({ to: "/login" });
+              }}
+            >
+              <LogOut /> Sair
             </Button>
           </div>
         </div>
